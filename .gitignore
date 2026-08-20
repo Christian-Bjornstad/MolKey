@@ -41,6 +41,7 @@ staging/
 packages/
 backups/
 exports/
+artifacts/
 
 # PyInstaller
 *.spec.bak

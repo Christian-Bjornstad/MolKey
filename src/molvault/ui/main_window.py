@@ -1,0 +1,246 @@
+"""Polished application shell for MolVault."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QSpacerItem,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from molvault.ui.theme import STYLESHEET
+
+
+class MainWindow(QMainWindow):
+    """Main navigation shell and privacy-conscious dashboard."""
+
+    def __init__(self, registry_path: str = "Not configured", *, registry_connected: bool = False) -> None:
+        super().__init__()
+        self.registry_path = registry_path
+        self.registry_connected = registry_connected
+        self.page_metadata = [
+            ("Dashboard", "Secure package activity at a glance"),
+            ("Packages", "Search, review, and export secure packages"),
+            ("Cases", "Manage internal case and specimen links"),
+            ("Key management", "Review protected key material and recovery readiness"),
+        ]
+        self.metric_values = {"ready": "0", "processing": "0", "attention": "0"}
+        self.navigation_buttons: list[QPushButton] = []
+        self.setWindowTitle("MolVault")
+        self.setFont(QFont("Arial", 10))
+        self.setMinimumSize(1100, 700)
+        self.resize(1360, 840)
+        self.setStyleSheet(STYLESHEET)
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        central = QWidget(objectName="centralWidget")
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._build_sidebar())
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        content_layout.addWidget(self._build_topbar())
+
+        self.page_stack = QStackedWidget()
+        self.page_stack.addWidget(self._build_dashboard())
+        self.page_stack.addWidget(
+            self._build_placeholder_page("Packages", "Search, review, and export secure packages.")
+        )
+        self.page_stack.addWidget(self._build_placeholder_page("Cases", "Manage internal case and specimen links."))
+        self.page_stack.addWidget(
+            self._build_placeholder_page("Key management", "Review protected key material and recovery readiness.")
+        )
+        content_layout.addWidget(self.page_stack, 1)
+        content_layout.addWidget(self._build_status_bar())
+        root.addWidget(content, 1)
+        self.setCentralWidget(central)
+
+    def _build_sidebar(self) -> QFrame:
+        sidebar = QFrame(objectName="sidebar")
+        sidebar.setFixedWidth(242)
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(20, 24, 20, 18)
+        layout.setSpacing(8)
+
+        brand_row = QHBoxLayout()
+        mark = QLabel("MV", objectName="brandMark", alignment=Qt.AlignmentFlag.AlignCenter)
+        brand_row.addWidget(mark)
+        brand_text = QVBoxLayout()
+        brand_text.setSpacing(0)
+        brand_text.addWidget(QLabel("MolVault", objectName="brandName"))
+        brand_text.addWidget(QLabel("Secure Package Registry", objectName="brandSubtitle"))
+        brand_row.addLayout(brand_text)
+        layout.addLayout(brand_row)
+        layout.addSpacing(28)
+
+        for index, label in enumerate(["Dashboard", "Packages", "Cases", "Key management"]):
+            button = QPushButton(label)
+            button.setProperty("nav", True)
+            button.setProperty("active", index == 0)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(self._make_navigation_handler(index))
+            self.navigation_buttons.append(button)
+            layout.addWidget(button)
+
+        layout.addItem(QSpacerItem(1, 1, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        badge = QLabel("SECURE WORKSPACE", objectName="environmentBadge")
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(badge)
+        layout.addSpacing(8)
+        layout.addWidget(QLabel("MolVault 0.1.0", objectName="brandSubtitle"))
+        return sidebar
+
+    def _make_navigation_handler(self, index: int) -> Callable[[], None]:
+        def navigate() -> None:
+            self.page_stack.setCurrentIndex(index)
+            self.page_title.setText(self.page_metadata[index][0])
+            self.page_description.setText(self.page_metadata[index][1])
+            for item_index, button in enumerate(self.navigation_buttons):
+                button.setProperty("active", item_index == index)
+                button.style().unpolish(button)
+                button.style().polish(button)
+
+        return navigate
+
+    def _build_topbar(self) -> QFrame:
+        topbar = QFrame(objectName="topbar")
+        layout = QHBoxLayout(topbar)
+        layout.setContentsMargins(32, 18, 32, 18)
+        titles = QVBoxLayout()
+        titles.setSpacing(2)
+        self.page_title = QLabel("Dashboard", objectName="pageTitle")
+        self.page_description = QLabel("Secure package activity at a glance", objectName="pageDescription")
+        titles.addWidget(self.page_title)
+        titles.addWidget(self.page_description)
+        layout.addLayout(titles)
+        layout.addStretch()
+        help_button = QPushButton("Help")
+        help_button.setObjectName("secondaryButton")
+        help_button.setEnabled(False)
+        help_button.setToolTip("Help is not available in this prototype")
+        layout.addWidget(help_button)
+        create = QPushButton("Create package", objectName="createPackageButton")
+        create.setAccessibleName("Create a secure package")
+        create.setCursor(Qt.CursorShape.PointingHandCursor)
+        create.setEnabled(False)
+        create.setToolTip("Package creation is not available in this prototype")
+        layout.addWidget(create)
+        return topbar
+
+    def _build_dashboard(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(32, 28, 32, 26)
+        layout.setSpacing(20)
+
+        notice = QFrame(objectName="privacyNotice")
+        notice_layout = QHBoxLayout(notice)
+        notice_layout.setContentsMargins(16, 12, 16, 12)
+        notice_layout.addWidget(QLabel("i", objectName="privacyIcon"))
+        self.privacy_notice = QLabel(
+            "Patient identifiers stay inside the registry. Exported package names contain only pseudonymous IDs.",
+            objectName="privacyText",
+        )
+        self.privacy_notice.setWordWrap(True)
+        notice_layout.addWidget(self.privacy_notice, 1)
+        layout.addWidget(notice)
+
+        metrics = QHBoxLayout()
+        metrics.setSpacing(16)
+        metrics.addWidget(
+            self._metric_card("READY TO EXPORT", self.metric_values["ready"], "Verified packages", "#217A58")
+        )
+        metrics.addWidget(
+            self._metric_card("IN PROCESS", self.metric_values["processing"], "Draft or encrypting", "#167D86")
+        )
+        metrics.addWidget(
+            self._metric_card("NEEDS ATTENTION", self.metric_values["attention"], "Failed or interrupted", "#A35C00")
+        )
+        layout.addLayout(metrics)
+
+        activity = QFrame(objectName="contentCard")
+        activity_layout = QVBoxLayout(activity)
+        activity_layout.setContentsMargins(22, 20, 22, 22)
+        activity_layout.setSpacing(12)
+        header = QHBoxLayout()
+        header.addWidget(QLabel("Recent packages", objectName="sectionTitle"))
+        header.addStretch()
+        search = QLineEdit()
+        search.setPlaceholderText("Search package ID…")
+        search.setAccessibleName("Search packages")
+        search.setFixedWidth(230)
+        header.addWidget(search)
+        activity_layout.addLayout(header)
+        activity_layout.addSpacing(24)
+        empty_symbol = QLabel("MV", objectName="privacyIcon", alignment=Qt.AlignmentFlag.AlignCenter)
+        activity_layout.addWidget(empty_symbol)
+        self.empty_state_title = QLabel(
+            "No packages yet", objectName="emptyStateTitle", alignment=Qt.AlignmentFlag.AlignCenter
+        )
+        activity_layout.addWidget(self.empty_state_title)
+        empty_detail = QLabel(
+            "Create the first secure package to begin the protected transfer workflow.",
+            objectName="muted",
+            alignment=Qt.AlignmentFlag.AlignCenter,
+        )
+        activity_layout.addWidget(empty_detail)
+        activity_layout.addStretch()
+        layout.addWidget(activity, 1)
+        return page
+
+    @staticmethod
+    def _metric_card(title: str, value: str, detail: str, accent: str) -> QFrame:
+        card = QFrame(objectName="metricCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 17, 20, 17)
+        title_label = QLabel(title, objectName="eyebrow")
+        title_label.setStyleSheet(f"color: {accent};")
+        layout.addWidget(title_label)
+        layout.addWidget(QLabel(value, objectName="metricValue"))
+        layout.addWidget(QLabel(detail, objectName="metricDetail"))
+        return card
+
+    @staticmethod
+    def _build_placeholder_page(title: str, description: str) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(32, 32, 32, 32)
+        card = QFrame(objectName="contentCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(28, 26, 28, 26)
+        card_layout.addWidget(QLabel(title, objectName="pageTitle"))
+        card_layout.addWidget(QLabel(description, objectName="pageDescription"))
+        card_layout.addStretch()
+        layout.addWidget(card)
+        return page
+
+    def _build_status_bar(self) -> QFrame:
+        status = QFrame(objectName="statusBar")
+        layout = QHBoxLayout(status)
+        layout.setContentsMargins(32, 10, 32, 10)
+        status_text = "Registry connected" if self.registry_connected else "Registry not connected"
+        status_object = "statusGood" if self.registry_connected else "muted"
+        self.connection_status = QLabel(status_text, objectName=status_object)
+        layout.addWidget(self.connection_status)
+        layout.addStretch()
+        layout.addWidget(QLabel("Registry:", objectName="muted"))
+        self.registry_path_label = QLabel(self.registry_path, objectName="statusPath")
+        layout.addWidget(self.registry_path_label)
+        return status
