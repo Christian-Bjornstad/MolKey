@@ -9,6 +9,21 @@ class ConfigError(Exception):
     """Configuration error that is safe to show to users."""
 
 
+def _is_mapped_drive(path: str) -> bool:
+    """Return whether a drive-letter path is an active Windows network mapping."""
+    if len(path) < 2 or path[1] != ":":
+        return False
+    try:
+        import ctypes
+
+        remote = ctypes.create_unicode_buffer(32768)
+        size = ctypes.c_ulong(len(remote))
+        result = int(ctypes.windll.mpr.WNetGetConnectionW(path[:2], remote, ctypes.byref(size)))
+        return result == 0
+    except (AttributeError, OSError):
+        return False
+
+
 @dataclass(frozen=True)
 class RegistryConfig:
     """Immutable registry configuration. Does not create directories."""
@@ -48,8 +63,11 @@ class RegistryConfig:
         root_text = str(registry_root)
         root = Path(root_text)
 
-        if not test_mode and not root_text.startswith(("\\\\", "//")):
-            raise ConfigError("Production registry root must be a UNC network path")
+        if not test_mode and not root_text.startswith(("\\\\", "//")) and not _is_mapped_drive(root_text):
+            raise ConfigError(
+                "Production registry root must be a UNC network path "
+                "(\\\\server\\share) or a mapped network drive (X:\\)"
+            )
 
         if validate_root:
             if not root.exists():

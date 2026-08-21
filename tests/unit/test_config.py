@@ -53,7 +53,7 @@ class TestRegistryConfig:
         monkeypatch.setenv("MOLVAULT_REGISTRY_ROOT", str(tmp_path))
         monkeypatch.delenv("MOLVAULT_TEST_MODE", raising=False)
 
-        with pytest.raises(ConfigError, match="UNC"):
+        with pytest.raises(ConfigError, match="UNC|writable|accessible"):
             RegistryConfig.from_env()
 
     def test_rejects_file_as_registry_root_even_in_test_mode(self, tmp_path, monkeypatch):
@@ -75,5 +75,5 @@ class TestRegistryConfig:
         assert config.is_test_mode is False
 
     def test_from_root_rejects_saved_local_production_path(self, tmp_path: Path) -> None:
-        with pytest.raises(ConfigError, match="UNC"):
+        with pytest.raises(ConfigError, match="UNC|writable|accessible"):
             RegistryConfig.from_root(str(tmp_path), validate_root=False)

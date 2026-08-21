@@ -4,7 +4,9 @@ from pathlib import Path
 
 from PyQt6.QtCore import QSettings
 
-from molvault.__main__ import resolve_registry_config
+from molvault.__main__ import initialize_registry, resolve_registry_config
+from molvault.config import RegistryConfig
+from molvault.infrastructure.migrations import SCHEMA_VERSION, get_schema_version
 
 
 def test_saved_settings_are_used_when_environment_is_missing(tmp_path: Path, monkeypatch) -> None:
@@ -34,3 +36,13 @@ def test_invalid_or_missing_configuration_returns_none(tmp_path: Path, monkeypat
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
 
     assert resolve_registry_config(settings, validate_root=False) is None
+
+
+def test_initialize_registry_creates_and_migrates_database(tmp_path: Path) -> None:
+    config = RegistryConfig.from_root(tmp_path, test_mode=True)
+
+    initialize_registry(config)
+
+    assert config.database_path.exists()
+    assert get_schema_version(config.database_path) == SCHEMA_VERSION
+    assert config.locks_dir.is_dir()

@@ -134,3 +134,36 @@ def test_package_repository_raises_when_transitioning_unknown_package(tmp_path: 
 
     with pytest.raises(RecordNotFoundError, match="SPK-2026-UNKNOWN"):
         PackageRepository(db_path).transition("SPK-2026-UNKNOWN", PackageState.ENCRYPTING)
+
+
+def test_repositories_list_newest_records_for_ui(tmp_path: Path) -> None:
+    db_path = tmp_path / "registry.db"
+    migrate(db_path)
+    cases = CaseRepository(db_path)
+    packages = PackageRepository(db_path)
+    cases.add(_case("CASE-ABC123"))
+    cases.add(CaseRecord("CASE-NEW", "PAT-456", "SPEC-26OUM12288", datetime(2026, 8, 21, tzinfo=UTC)))
+    packages.add(_package("SPK-2026-111111111111111111111111"))
+
+    assert [record.case_id for record in cases.list_recent()] == ["CASE-NEW", "CASE-ABC123"]
+    assert [record.package_id for record in packages.list_recent()] == [
+        "SPK-2026-111111111111111111111111"
+    ]
+
+
+def test_package_repository_round_trips_internal_notes(tmp_path: Path) -> None:
+    db_path = tmp_path / "registry.db"
+    migrate(db_path)
+    CaseRepository(db_path).add(_case())
+    record = PackageRecord(
+        package_id="SPK-2026-AAAAAAAAAAAAAAAAAAAAAAAA",
+        case_id="CASE-ABC123",
+        key_id="KEY-PENDING",
+        destination="External lab",
+        destination_ref="Pending",
+        notes="Internal workflow note",
+    )
+
+    PackageRepository(db_path).add(record)
+
+    assert PackageRepository(db_path).get(record.package_id) == record

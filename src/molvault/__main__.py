@@ -1,4 +1,4 @@
-"""MolVault desktop application entry point."""
+"""MolKey desktop application entry point."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication
 
 from molvault.config import ConfigError, RegistryConfig
+from molvault.infrastructure.migrations import migrate
 from molvault.ui.main_window import MainWindow
 
 
@@ -26,14 +27,28 @@ def resolve_registry_config(settings: QSettings, *, validate_root: bool = True) 
     return None
 
 
+def initialize_registry(config: RegistryConfig) -> None:
+    """Create required registry folders and migrate the shared database."""
+    config.locks_dir.mkdir(parents=True, exist_ok=True)
+    config.packages_dir.mkdir(parents=True, exist_ok=True)
+    config.staging_dir.mkdir(parents=True, exist_ok=True)
+    config.backups_dir.mkdir(parents=True, exist_ok=True)
+    migrate(config.database_path)
+
+
 def main() -> int:
-    """Start the MolVault desktop application."""
+    """Start the MolKey desktop application."""
     application = QApplication(sys.argv)
-    application.setApplicationName("MolVault")
-    application.setOrganizationName("MolVault")
+    application.setApplicationName("MolKey")
+    application.setOrganizationName("MolKey")
     application.setFont(QFont("Arial", 10))
     settings = QSettings()
     config = resolve_registry_config(settings)
+    if config is not None:
+        try:
+            initialize_registry(config)
+        except (OSError, RuntimeError):
+            config = None
     if config is None:
         registry_path = str(settings.value("registry/root", "Registry not configured or inaccessible"))
         registry_connected = False
@@ -44,6 +59,7 @@ def main() -> int:
         registry_path=registry_path,
         registry_connected=registry_connected,
         settings=settings,
+        database_path=config.database_path if config is not None else None,
     )
     window.show()
     return application.exec()

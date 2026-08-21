@@ -95,6 +95,17 @@ class CaseRepository:
             return None
         return _case_from_row(row)
 
+    def list_recent(self, limit: int = 50) -> list[CaseRecord]:
+        conn = connect(self.db_path)
+        try:
+            rows = conn.execute(
+                "SELECT id, patient_id, case_number, created_at FROM cases ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [_case_from_row(row) for row in rows]
+
 
 class PackageRepository:
     """Persistence operations for packages and workflow transitions."""
@@ -110,9 +121,9 @@ class PackageRepository:
                 conn.execute(
                     """
                     INSERT INTO packages (
-                        id, case_id, state, destination, destination_ref,
+                        id, case_id, state, destination, destination_ref, notes,
                         created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         record.package_id,
@@ -120,6 +131,7 @@ class PackageRepository:
                         record.state.value,
                         record.destination,
                         record.destination_ref,
+                        record.notes,
                         record.created_at.isoformat(),
                         record.updated_at.isoformat(),
                     ),
@@ -134,7 +146,7 @@ class PackageRepository:
         try:
             row = conn.execute(
                 """
-                SELECT id, case_id, state, destination, destination_ref, key_id, created_at, updated_at
+                SELECT id, case_id, state, destination, destination_ref, key_id, notes, created_at, updated_at
                 FROM packages WHERE id = ?
                 """,
                 (package_id,),
@@ -150,10 +162,24 @@ class PackageRepository:
         try:
             rows = conn.execute(
                 """
-                SELECT id, case_id, state, destination, destination_ref, key_id, created_at, updated_at
+                SELECT id, case_id, state, destination, destination_ref, key_id, notes, created_at, updated_at
                 FROM packages WHERE case_id = ? ORDER BY created_at, id
                 """,
                 (case_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [_package_from_row(row) for row in rows]
+
+    def list_recent(self, limit: int = 50) -> list[PackageRecord]:
+        conn = connect(self.db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT id, case_id, state, destination, destination_ref, key_id, notes, created_at, updated_at
+                FROM packages ORDER BY created_at DESC LIMIT ?
+                """,
+                (limit,),
             ).fetchall()
         finally:
             conn.close()
@@ -370,6 +396,7 @@ def _package_from_row(row: sqlite3.Row) -> PackageRecord:
         key_id=key_id,
         destination=destination,
         destination_ref=destination_ref,
+        notes=str(row["notes"]) if row["notes"] else "",
         state=PackageState(str(row["state"])),
         created_at=datetime.fromisoformat(str(row["created_at"])),
         updated_at=datetime.fromisoformat(str(row["updated_at"])),

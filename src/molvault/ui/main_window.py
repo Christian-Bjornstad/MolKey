@@ -1,12 +1,15 @@
-"""Polished application shell for MolVault."""
+"""Polished application shell for MolKey."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -17,10 +20,14 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSpacerItem,
     QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
+from molvault.application.package_service import PackageService
+from molvault.config import _is_mapped_drive
 from molvault.ui.theme import STYLESHEET
 
 
@@ -33,12 +40,15 @@ class MainWindow(QMainWindow):
         *,
         registry_connected: bool = False,
         settings: QSettings | None = None,
+        database_path: Path | None = None,
     ) -> None:
         super().__init__()
         self.settings = settings or QSettings()
         saved_registry_path = str(self.settings.value("registry/root", ""))
         self.registry_path = saved_registry_path or registry_path
         self.registry_connected = registry_connected
+        self.database_path = database_path
+        self.package_service = PackageService(database_path) if database_path is not None else None
         self.page_metadata = [
             ("Dashboard", "Secure package activity at a glance"),
             ("Packages", "Search, review, and export secure packages"),
@@ -48,7 +58,7 @@ class MainWindow(QMainWindow):
         ]
         self.metric_values = {"ready": "0", "processing": "0", "attention": "0"}
         self.navigation_buttons: list[QPushButton] = []
-        self.setWindowTitle("MolVault")
+        self.setWindowTitle("MolKey")
         self.setFont(QFont("Arial", 10))
         self.setMinimumSize(1100, 700)
         self.resize(1360, 840)
@@ -70,10 +80,8 @@ class MainWindow(QMainWindow):
 
         self.page_stack = QStackedWidget()
         self.page_stack.addWidget(self._build_dashboard())
-        self.page_stack.addWidget(
-            self._build_placeholder_page("Packages", "Search, review, and export secure packages.")
-        )
-        self.page_stack.addWidget(self._build_placeholder_page("Cases", "Manage internal case and specimen links."))
+        self.page_stack.addWidget(self._build_packages_page())
+        self.page_stack.addWidget(self._build_cases_page())
         self.page_stack.addWidget(
             self._build_placeholder_page("Key management", "Review protected key material and recovery readiness.")
         )
@@ -91,11 +99,11 @@ class MainWindow(QMainWindow):
         layout.setSpacing(8)
 
         brand_row = QHBoxLayout()
-        mark = QLabel("MV", objectName="brandMark", alignment=Qt.AlignmentFlag.AlignCenter)
+        mark = QLabel("MK", objectName="brandMark", alignment=Qt.AlignmentFlag.AlignCenter)
         brand_row.addWidget(mark)
         brand_text = QVBoxLayout()
         brand_text.setSpacing(0)
-        brand_text.addWidget(QLabel("MolVault", objectName="brandName"))
+        brand_text.addWidget(QLabel("MolKey", objectName="brandName"))
         brand_text.addWidget(QLabel("Secure Package Registry", objectName="brandSubtitle"))
         brand_row.addLayout(brand_text)
         layout.addLayout(brand_row)
@@ -114,7 +122,7 @@ class MainWindow(QMainWindow):
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(badge)
         layout.addSpacing(8)
-        layout.addWidget(QLabel("MolVault 0.1.0", objectName="brandSubtitle"))
+        layout.addWidget(QLabel("MolKey 0.1.0", objectName="brandSubtitle"))
         return sidebar
 
     def _navigation_button(self, label: str, index: int) -> QPushButton:
@@ -128,6 +136,10 @@ class MainWindow(QMainWindow):
 
     def _make_navigation_handler(self, index: int) -> Callable[[], None]:
         def navigate() -> None:
+            if index == 1:
+                self._refresh_packages()
+            elif index == 2:
+                self._refresh_cases()
             self.page_stack.setCurrentIndex(index)
             self.page_title.setText(self.page_metadata[index][0])
             self.page_description.setText(self.page_metadata[index][1])
@@ -155,13 +167,119 @@ class MainWindow(QMainWindow):
         help_button.setEnabled(False)
         help_button.setToolTip("Help is not available in this prototype")
         layout.addWidget(help_button)
-        create = QPushButton("Create package", objectName="createPackageButton")
-        create.setAccessibleName("Create a secure package")
-        create.setCursor(Qt.CursorShape.PointingHandCursor)
-        create.setEnabled(False)
-        create.setToolTip("Package creation is not available in this prototype")
-        layout.addWidget(create)
+        self.create_package_button = QPushButton("Create package", objectName="createPackageButton")
+        self.create_package_button.setAccessibleName("Create a secure package")
+        self.create_package_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.create_package_button.setEnabled(self.package_service is not None and self.registry_connected)
+        self.create_package_button.setToolTip("Create a pseudonymous package draft")
+        self.create_package_button.clicked.connect(self._open_create_package_dialog)
+        layout.addWidget(self.create_package_button)
         return topbar
+
+    def _open_create_package_dialog(self) -> None:
+        if self.package_service is None:
+            return
+        dialog = QDialog(self, objectName="createPackageDialog")
+        dialog.setWindowTitle("Create package")
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("Patient ID", objectName="fieldLabel"))
+        patient_id = QLineEdit(objectName="patientIdInput")
+        layout.addWidget(patient_id)
+        layout.addWidget(QLabel("DIT / case number", objectName="fieldLabel"))
+        case_number = QLineEdit(objectName="ditInput")
+        layout.addWidget(case_number)
+        feedback = QLabel("", objectName="statusError")
+        layout.addWidget(feedback)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+        save = buttons.addButton("Save draft", QDialogButtonBox.ButtonRole.AcceptRole)
+        save.setObjectName("saveDraftButton")
+        buttons.rejected.connect(dialog.reject)
+
+        def save_draft() -> None:
+            try:
+                self.package_service.create_draft(
+                    patient_id=patient_id.text(), case_number=case_number.text()
+                )
+            except ValueError as exc:
+                feedback.setText(str(exc))
+                return
+            dialog.accept()
+            self._refresh_packages()
+            self.page_stack.setCurrentIndex(1)
+            self.page_title.setText("Packages")
+
+        save.clicked.connect(save_draft)
+        layout.addWidget(buttons)
+        dialog.setModal(True)
+        dialog.show()
+
+    def _build_packages_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(32, 28, 32, 28)
+        card = QFrame(objectName="contentCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(22, 20, 22, 22)
+        card_layout.addWidget(QLabel("Secure packages", objectName="sectionTitle"))
+        self.packages_table = QTableWidget(0, 4, objectName="packagesTable")
+        self.packages_table.setHorizontalHeaderLabels(
+            ["Package ID", "State", "Destination", "Created"]
+        )
+        self.packages_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.packages_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        card_layout.addWidget(self.packages_table)
+        layout.addWidget(card)
+        self._refresh_packages()
+        return page
+
+    def _refresh_packages(self) -> None:
+        if not hasattr(self, "packages_table"):
+            return
+        packages = self.package_service.packages.list_recent() if self.package_service is not None else []
+        self.packages_table.setRowCount(len(packages))
+        for row, package in enumerate(packages):
+            values = (
+                package.package_id,
+                package.state.value,
+                package.destination or "Not set",
+                package.created_at.astimezone().strftime("%Y-%m-%d %H:%M"),
+            )
+            for column, value in enumerate(values):
+                self.packages_table.setItem(row, column, QTableWidgetItem(value))
+
+    def _build_cases_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(32, 28, 32, 28)
+        card = QFrame(objectName="contentCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(22, 20, 22, 22)
+        card_layout.addWidget(QLabel("Internal case mappings", objectName="sectionTitle"))
+        self.cases_table = QTableWidget(0, 4, objectName="casesTable")
+        self.cases_table.setHorizontalHeaderLabels(
+            ["Case ID", "Patient ID", "Specimen ID", "Created"]
+        )
+        self.cases_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.cases_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        card_layout.addWidget(self.cases_table)
+        layout.addWidget(card)
+        self._refresh_cases()
+        return page
+
+    def _refresh_cases(self) -> None:
+        if not hasattr(self, "cases_table"):
+            return
+        cases = self.package_service.cases.list_recent() if self.package_service is not None else []
+        self.cases_table.setRowCount(len(cases))
+        for row, case in enumerate(cases):
+            values = (
+                case.case_id,
+                case.patient_id,
+                case.specimen_id,
+                case.created_at.astimezone().strftime("%Y-%m-%d %H:%M"),
+            )
+            for column, value in enumerate(values):
+                self.cases_table.setItem(row, column, QTableWidgetItem(value))
 
     def _build_dashboard(self) -> QWidget:
         page = QWidget()
@@ -284,7 +402,8 @@ class MainWindow(QMainWindow):
         card_layout.addLayout(path_row)
 
         hint = QLabel(
-            "Production requires a UNC path beginning with \\\\ or //. Do not select a personal or local folder.",
+            "Production requires a UNC path beginning with \\\\ or //, or a mapped "
+            "network drive (X:\\...). Do not select a personal or local folder.",
             objectName="muted",
         )
         hint.setWordWrap(True)
@@ -311,8 +430,10 @@ class MainWindow(QMainWindow):
 
     def _save_registry_folder(self) -> None:
         registry_path = self.registry_path_input.text().strip()
-        if not registry_path.startswith((r"\\", "//")):
-            self._set_settings_feedback("Enter an approved UNC network path beginning with \\\\ or //.", error=True)
+        if not (registry_path.startswith((r"\\", "//")) or _is_mapped_drive(registry_path)):
+            self._set_settings_feedback(
+                "Enter an approved UNC network path or mapped network drive.", error=True
+            )
             return
         self.settings.setValue("registry/root", registry_path)
         self.settings.sync()
