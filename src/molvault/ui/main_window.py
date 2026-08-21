@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
 
 from molvault.application.package_service import PackageService
 from molvault.config import ConfigError, RegistryConfig, _is_mapped_drive
+from molvault.domain.states import PackageState
 from molvault.infrastructure.migrations import migrate
 from molvault.ui.theme import STYLESHEET
 
@@ -252,12 +253,20 @@ class MainWindow(QMainWindow):
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(22, 20, 22, 22)
         card_layout.addWidget(QLabel("Secure packages", objectName="sectionTitle"))
+        guidance = QLabel(
+            "Create a draft, then double-click its Package ID to add files, encrypt, "
+            "verify, and export it.",
+            objectName="settingsHelp",
+        )
+        guidance.setWordWrap(True)
+        card_layout.addWidget(guidance)
         self.packages_table = QTableWidget(0, 4, objectName="packagesTable")
         self.packages_table.setHorizontalHeaderLabels(
             ["Package ID", "State", "Destination", "Created"]
         )
         self.packages_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.packages_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.packages_table.itemDoubleClicked.connect(self._on_package_item_double_clicked)
         card_layout.addWidget(self.packages_table)
         layout.addWidget(card)
         self._refresh_packages()
@@ -277,6 +286,162 @@ class MainWindow(QMainWindow):
             )
             for column, value in enumerate(values):
                 self.packages_table.setItem(row, column, QTableWidgetItem(value))
+
+    def _on_package_item_double_clicked(self, item: QTableWidgetItem) -> None:
+        """Open details for the package at the selected row."""
+        if item.column() != 0:
+            return
+        self._open_package_details(item.text())
+
+    def _open_package_details(self, package_id: str) -> None:
+        """Show package workflow details and file selection actions."""
+        if self.package_service is None:
+            return
+        package = self.package_service.packages.get(package_id)
+        if package is None:
+            return
+
+        dialog = QDialog(self, objectName="packageDetailsDialog")
+        dialog.setWindowTitle(f"Package {package.package_id}")
+        dialog.setMinimumSize(680, 480)
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(14)
+
+        layout.addWidget(QLabel(package.package_id, objectName="pageTitle"))
+        layout.addWidget(QLabel(f"Status: {package.state.value}", objectName="statusGood"))
+        workflow = QLabel(
+            "1. Add files  →  2. Encrypt and verify  →  3. Export to folder",
+            objectName="settingsHelp",
+        )
+        workflow.setWordWrap(True)
+        layout.addWidget(workflow)
+        status_text = {
+            PackageState.DRAFT: "Draft — add one or more files to continue",
+            PackageState.READY: "Ready — verified and safe to export",
+            PackageState.EXPORTED: "Exported — package delivery completed",
+        }.get(package.state, f"{package.state.value} — processing")
+        workflow_status = QLabel(status_text, objectName="packageWorkflowStatus")
+        layout.addWidget(workflow_status)
+
+        layout.addWidget(QLabel("Files in this package", objectName="sectionTitle"))
+        files_table = QTableWidget(0, 3, objectName="packageFilesTable")
+        files_table.setHorizontalHeaderLabels(["File", "Size", "Status"])
+        files_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        stored_files = self.package_service.package_files.list_for_package(package_id)
+        files_table.setRowCount(len(stored_files))
+        for row, item in enumerate(stored_files):
+            files_table.setItem(row, 0, QTableWidgetItem(item.export_name))
+            files_table.setItem(row, 1, QTableWidgetItem(f"{item.encrypted_size:,} bytes"))
+            files_table.setItem(row, 2, QTableWidgetItem("Encrypted and verified"))
+        layout.addWidget(files_table, 1)
+
+        action_row = QHBoxLayout()
+        add_files = QPushButton("Add files", objectName="addFilesButton")
+        add_files.setEnabled(package.state is PackageState.DRAFT)
+        add_files.setToolTip("Select one or more files to include in this package")
+        action_row.addWidget(add_files)
+        action_row.addStretch()
+        encrypt = QPushButton("Encrypt and verify", objectName="encryptPackageButton")
+        encrypt.setEnabled(False)
+        export = QPushButton("Export package", objectName="exportPackageButton")
+        export.setEnabled(package.state is PackageState.READY)
+        add_files.clicked.connect(
+            lambda: self._add_files_to_package(package.package_id, files_table, encrypt)
+        )
+        encrypt.clicked.connect(
+            lambda: self._encrypt_package(
+                package.package_id, files_table, encrypt, export, workflow_status
+            )
+        )
+        action_row.addWidget(encrypt)
+        export.clicked.connect(
+            lambda: self._export_package(package.package_id, export, workflow_status)
+        )
+        action_row.addWidget(export)
+        layout.addLayout(action_row)
+
+        close_buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close_buttons.rejected.connect(dialog.reject)
+        layout.addWidget(close_buttons)
+        dialog.setModal(True)
+        dialog.show()
+
+    def _add_files_to_package(
+        self,
+        package_id: str,
+        files_table: QTableWidget,
+        encrypt_button: QPushButton,
+    ) -> None:
+        """Select source files and show only pseudonymous names in the UI."""
+        if self.package_service is None:
+            return
+        selected, _filter = QFileDialog.getOpenFileNames(
+            self,
+            "Select files for the secure package",
+            "",
+            "All files (*)",
+        )
+        if not selected:
+            return
+        staged = self.package_service.add_source_files(
+            package_id, [Path(item) for item in selected]
+        )
+        files_table.setRowCount(len(staged))
+        for row, item in enumerate(staged):
+            size = item.source_path.stat().st_size
+            files_table.setItem(row, 0, QTableWidgetItem(item.export_name))
+            files_table.setItem(row, 1, QTableWidgetItem(f"{size:,} bytes"))
+            files_table.setItem(row, 2, QTableWidgetItem("Selected"))
+        encrypt_button.setEnabled(bool(staged))
+
+    def _encrypt_package(
+        self,
+        package_id: str,
+        files_table: QTableWidget,
+        encrypt_button: QPushButton,
+        export_button: QPushButton,
+        status_label: QLabel,
+    ) -> None:
+        """Encrypt and verify the selected files before enabling export."""
+        if self.package_service is None:
+            return
+        encrypt_button.setEnabled(False)
+        status_label.setText("Encrypting and verifying…")
+        try:
+            self.package_service.encrypt_and_verify(package_id)
+        except (OSError, ValueError) as exc:
+            status_label.setText(f"Could not prepare package: {exc}")
+            encrypt_button.setEnabled(True)
+            return
+        for row in range(files_table.rowCount()):
+            files_table.setItem(row, 2, QTableWidgetItem("Encrypted and verified"))
+        status_label.setText("Ready — verified and safe to export")
+        export_button.setEnabled(True)
+        self._refresh_packages()
+
+    def _export_package(
+        self,
+        package_id: str,
+        export_button: QPushButton,
+        status_label: QLabel,
+    ) -> None:
+        """Ask for a folder, export verified artifacts, and show the result."""
+        if self.package_service is None:
+            return
+        selected = QFileDialog.getExistingDirectory(
+            self, "Choose export folder for the verified package"
+        )
+        if not selected:
+            return
+        export_button.setEnabled(False)
+        try:
+            exported = self.package_service.export_package(package_id, Path(selected))
+        except (OSError, ValueError) as exc:
+            status_label.setText(f"Export failed: {exc}")
+            export_button.setEnabled(True)
+            return
+        status_label.setText(f"Exported to {exported}")
+        self._refresh_packages()
 
     def _build_cases_page(self) -> QWidget:
         page = QWidget()
