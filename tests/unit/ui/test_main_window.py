@@ -1,5 +1,5 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QLineEdit, QPushButton, QTableWidget
+from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QTableWidget
 
 from molvault.infrastructure.migrations import migrate
 from molvault.infrastructure.repositories import PackageRepository
@@ -15,6 +15,22 @@ def test_main_window_has_product_identity_and_safe_unavailable_actions(qtbot):
     assert window.findChild(QPushButton, "createPackageButton").text() == "Create package"
     assert window.findChild(QPushButton, "createPackageButton").accessibleName() == "Create a secure package"
     assert not window.findChild(QPushButton, "createPackageButton").isEnabled()
+
+
+def test_help_button_opens_getting_started_dialog(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    help_button = window.findChild(QPushButton, "helpButton")
+    assert help_button is not None
+    assert help_button.isEnabled()
+    qtbot.mouseClick(help_button, Qt.MouseButton.LeftButton)
+
+    dialog = window.findChild(QDialog, "helpDialog")
+    assert dialog is not None
+    help_text = dialog.findChild(QLabel, "helpText").text()
+    assert "database is created automatically" in help_text
+    assert "Create package" in help_text
 
 
 def test_dashboard_exposes_connection_and_privacy_status(qtbot):

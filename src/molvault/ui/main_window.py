@@ -27,7 +27,8 @@ from PyQt6.QtWidgets import (
 )
 
 from molvault.application.package_service import PackageService
-from molvault.config import _is_mapped_drive
+from molvault.config import ConfigError, RegistryConfig, _is_mapped_drive
+from molvault.infrastructure.migrations import migrate
 from molvault.ui.theme import STYLESHEET
 
 
@@ -162,10 +163,10 @@ class MainWindow(QMainWindow):
         titles.addWidget(self.page_description)
         layout.addLayout(titles)
         layout.addStretch()
-        help_button = QPushButton("Help")
-        help_button.setObjectName("secondaryButton")
-        help_button.setEnabled(False)
-        help_button.setToolTip("Help is not available in this prototype")
+        help_button = QPushButton("Help", objectName="helpButton")
+        help_button.setProperty("secondary", True)
+        help_button.setToolTip("Open the MolKey getting started guide")
+        help_button.clicked.connect(self._open_help_dialog)
         layout.addWidget(help_button)
         self.create_package_button = QPushButton("Create package", objectName="createPackageButton")
         self.create_package_button.setAccessibleName("Create a secure package")
@@ -175,6 +176,36 @@ class MainWindow(QMainWindow):
         self.create_package_button.clicked.connect(self._open_create_package_dialog)
         layout.addWidget(self.create_package_button)
         return topbar
+
+    def _open_help_dialog(self) -> None:
+        dialog = QDialog(self, objectName="helpDialog")
+        dialog.setWindowTitle("MolKey help")
+        dialog.setMinimumWidth(560)
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(14)
+        layout.addWidget(QLabel("Getting started with MolKey", objectName="pageTitle"))
+        help_text = QLabel(
+            "<b>1. Configure the registry</b><br>"
+            "Open Settings and select the approved secure shared folder. "
+            "The database is created automatically when MolKey connects; you do not create it manually.<br><br>"
+            "<b>2. Confirm the connection</b><br>"
+            "MolKey initializes the registry immediately. Confirm that the status bar says "
+            "Registry connected.<br><br>"
+            "<b>3. Create package</b><br>"
+            "When the status bar says Registry connected, select Create package, enter the patient ID and "
+            "DIT / case number, and save the draft. MolKey generates the pseudonymous package ID.<br><br>"
+            "<b>Privacy</b><br>"
+            "Patient identifiers remain in the protected registry and are not used in exported package names.",
+            objectName="helpText",
+        )
+        help_text.setWordWrap(True)
+        help_text.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(help_text)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.setModal(True)
+        dialog.show()
 
     def _open_create_package_dialog(self) -> None:
         if self.package_service is None:
@@ -326,7 +357,7 @@ class MainWindow(QMainWindow):
         header.addWidget(search)
         activity_layout.addLayout(header)
         activity_layout.addSpacing(24)
-        empty_symbol = QLabel("MV", objectName="privacyIcon", alignment=Qt.AlignmentFlag.AlignCenter)
+        empty_symbol = QLabel("MK", objectName="privacyIcon", alignment=Qt.AlignmentFlag.AlignCenter)
         activity_layout.addWidget(empty_symbol)
         self.empty_state_title = QLabel(
             "No packages yet", objectName="emptyStateTitle", alignment=Qt.AlignmentFlag.AlignCenter
@@ -380,7 +411,7 @@ class MainWindow(QMainWindow):
         card_layout.setSpacing(12)
         card_layout.addWidget(QLabel("Shared registry", objectName="sectionTitle"))
         help_text = QLabel(
-            "Choose the hospital's approved secure shared folder. MolVault stores the registry database, "
+            "Choose the hospital's approved secure shared folder. MolKey stores the registry database, "
             "encrypted packages, locks, and backups below this location.",
             objectName="settingsHelp",
         )
@@ -392,7 +423,7 @@ class MainWindow(QMainWindow):
         path_row = QHBoxLayout()
         self.registry_path_input = QLineEdit()
         self.registry_path_input.setAccessibleName("Hospital registry folder")
-        self.registry_path_input.setPlaceholderText(r"\\server\secure-share\MolVault")
+        self.registry_path_input.setPlaceholderText(r"\\server\secure-share\MolKey")
         self.registry_path_input.setText(self.registry_path if self.registry_path.startswith((r"\\", "//")) else "")
         path_row.addWidget(self.registry_path_input, 1)
         browse = QPushButton("Browse", objectName="browseRegistryButton")
@@ -439,7 +470,27 @@ class MainWindow(QMainWindow):
         self.settings.sync()
         self.registry_path = registry_path
         self.registry_path_label.setText(registry_path)
-        self._set_settings_feedback("Registry folder saved.", error=False)
+        try:
+            config = RegistryConfig.from_root(registry_path)
+            config.locks_dir.mkdir(parents=True, exist_ok=True)
+            config.packages_dir.mkdir(parents=True, exist_ok=True)
+            config.staging_dir.mkdir(parents=True, exist_ok=True)
+            config.backups_dir.mkdir(parents=True, exist_ok=True)
+            migrate(config.database_path)
+        except (ConfigError, OSError, RuntimeError) as exc:
+            self._set_settings_feedback(
+                f"Folder saved, but MolKey could not connect: {exc}", error=True
+            )
+            return
+        self.database_path = config.database_path
+        self.package_service = PackageService(config.database_path)
+        self.registry_connected = True
+        self.connection_status.setText("Registry connected")
+        self.connection_status.setObjectName("statusGood")
+        self.connection_status.style().unpolish(self.connection_status)
+        self.connection_status.style().polish(self.connection_status)
+        self.create_package_button.setEnabled(True)
+        self._set_settings_feedback("Registry connected and ready.", error=False)
 
     def _set_settings_feedback(self, text: str, *, error: bool) -> None:
         self.settings_feedback.setText(text)
