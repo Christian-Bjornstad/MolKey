@@ -35,7 +35,7 @@ def test_save_registry_path_persists_valid_unc(qtbot, tmp_path: Path) -> None:
     assert settings.value("registry/root") == unc
     assert window.settings_feedback.text().startswith("Folder saved, but MolKey could not connect:")
     assert window.settings_feedback.objectName() == "statusError"
-    assert not window.create_package_button.isEnabled()
+    assert not window.generate_key_button.isEnabled()
     assert window.registry_path_label.text() == unc
 
 
@@ -84,6 +84,6 @@ def test_saving_accessible_registry_connects_without_restart(qtbot, tmp_path: Pa
 
     assert config.database_path.exists()
     assert window.registry_connected
-    assert window.create_package_button.isEnabled()
+    assert window.generate_key_button.isEnabled()
     assert window.connection_status.text() == "Registry connected"
     assert window.settings_feedback.text() == "Registry connected and ready."

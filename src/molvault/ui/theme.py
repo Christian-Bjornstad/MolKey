@@ -48,11 +48,12 @@ QLabel#environmentBadge {
 QFrame#topbar { background: white; border-bottom: 1px solid #D0CEE8; }
 QLabel#pageTitle { font-size: 24px; font-weight: 700; color: #2D2950; }
 QLabel#pageDescription { color: #7A76A3; }
-QPushButton#primaryButton, QPushButton#createPackageButton {
+QPushButton#primaryButton, QPushButton#generateKeyButton, QPushButton#dashboardGenerateButton {
     background: #847CBA; color: white; border: none; border-radius: 7px;
     padding: 10px 18px; font-weight: 700;
 }
-QPushButton#primaryButton:hover, QPushButton#createPackageButton:hover { background: #5E5794; }
+QPushButton#primaryButton:hover, QPushButton#generateKeyButton:hover,
+QPushButton#dashboardGenerateButton:hover { background: #5E5794; }
 QPushButton#secondaryButton, QPushButton[secondary="true"] {
     background: white; color: #2D2950; border: 1px solid #B8B4D8;
     border-radius: 7px; padding: 9px 15px; font-weight: 600;

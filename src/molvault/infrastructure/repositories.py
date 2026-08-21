@@ -56,6 +56,76 @@ class DestinationRecord:
     is_active: bool
 
 
+@dataclass(frozen=True)
+class PatientKeyRecord:
+    """Permanent pseudonymous key assigned to one internal patient."""
+
+    patient_id: str
+    pseudonymous_key: str
+    created_at: datetime
+
+
+class PatientKeyRepository:
+    """Persistence operations for permanent patient-to-key mappings."""
+
+    def __init__(self, db_path: Path) -> None:
+        self.db_path = db_path
+
+    def get_or_create(self, patient_id: str, pseudonymous_key: str) -> PatientKeyRecord:
+        with transaction(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO patient_keys (patient_id, pseudonymous_key)
+                VALUES (?, ?)
+                ON CONFLICT(patient_id) DO NOTHING
+                """,
+                (patient_id, pseudonymous_key),
+            )
+            row = conn.execute(
+                "SELECT patient_id, pseudonymous_key, created_at FROM patient_keys WHERE patient_id = ?",
+                (patient_id,),
+            ).fetchone()
+        if row is None:  # pragma: no cover - guarded by insert/select transaction
+            raise RepositoryError(f"Patient key was not saved: {patient_id}")
+        return _patient_key_from_row(row)
+
+    def get_by_patient(self, patient_id: str) -> PatientKeyRecord | None:
+        conn = connect(self.db_path)
+        try:
+            row = conn.execute(
+                "SELECT patient_id, pseudonymous_key, created_at FROM patient_keys WHERE patient_id = ?",
+                (patient_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+        return _patient_key_from_row(row) if row is not None else None
+
+    def get_by_key(self, pseudonymous_key: str) -> PatientKeyRecord | None:
+        conn = connect(self.db_path)
+        try:
+            row = conn.execute(
+                "SELECT patient_id, pseudonymous_key, created_at FROM patient_keys WHERE pseudonymous_key = ?",
+                (pseudonymous_key,),
+            ).fetchone()
+        finally:
+            conn.close()
+        return _patient_key_from_row(row) if row is not None else None
+
+    def list_recent(self, limit: int = 50) -> list[PatientKeyRecord]:
+        conn = connect(self.db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT patient_id, pseudonymous_key, created_at
+                FROM patient_keys ORDER BY created_at DESC, patient_id LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [_patient_key_from_row(row) for row in rows]
+
+
 class CaseRepository:
     """Persistence operations for internal cases."""
 
@@ -375,6 +445,14 @@ class DestinationRepository:
             str(row["config_json"]),
             bool(row["is_active"]),
         )
+
+
+def _patient_key_from_row(row: sqlite3.Row) -> PatientKeyRecord:
+    return PatientKeyRecord(
+        patient_id=str(row["patient_id"]),
+        pseudonymous_key=str(row["pseudonymous_key"]),
+        created_at=datetime.fromisoformat(str(row["created_at"])),
+    )
 
 
 def _case_from_row(row: sqlite3.Row) -> CaseRecord:

@@ -1,12 +1,13 @@
-"""Polished application shell for MolKey."""
+"""Polished application shell for the MolKey patient pseudonym registry."""
 
 from __future__ import annotations
 
+import csv
 from collections.abc import Callable
 from pathlib import Path
 
 from PyQt6.QtCore import QSettings, Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QGuiApplication
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -22,19 +23,20 @@ from PyQt6.QtWidgets import (
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from molvault.application.package_service import PackageService
+from molvault.application.patient_key_service import BatchResult, PatientKeyService
 from molvault.config import ConfigError, RegistryConfig, _is_mapped_drive
-from molvault.domain.states import PackageState
 from molvault.infrastructure.migrations import migrate
+from molvault.infrastructure.repositories import PatientKeyRecord
 from molvault.ui.theme import STYLESHEET
 
 
 class MainWindow(QMainWindow):
-    """Main navigation shell and privacy-conscious dashboard."""
+    """Main navigation shell for stable patient pseudonym management."""
 
     def __init__(
         self,
@@ -50,15 +52,15 @@ class MainWindow(QMainWindow):
         self.registry_path = saved_registry_path or registry_path
         self.registry_connected = registry_connected
         self.database_path = database_path
-        self.package_service = PackageService(database_path) if database_path is not None else None
+        self.key_service = PatientKeyService(database_path) if database_path is not None else None
+        self.current_batch: BatchResult | None = None
         self.page_metadata = [
-            ("Dashboard", "Secure package activity at a glance"),
-            ("Packages", "Search, review, and export secure packages"),
-            ("Cases", "Manage internal case and specimen links"),
-            ("Key management", "Review protected key material and recovery readiness"),
+            ("Dashboard", "Generate or retrieve a permanent patient key"),
+            ("Batch generation", "Paste or import patient IDs and create keys in one batch"),
+            ("Lookup", "Find a mapping by patient ID or MolKey"),
+            ("Key registry", "Review protected internal patient-to-key mappings"),
             ("Settings", "Configure the secure shared registry folder"),
         ]
-        self.metric_values = {"ready": "0", "processing": "0", "attention": "0"}
         self.navigation_buttons: list[QPushButton] = []
         self.setWindowTitle("MolKey")
         self.setFont(QFont("Arial", 10))
@@ -73,20 +75,16 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         root.addWidget(self._build_sidebar())
-
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
         content_layout.addWidget(self._build_topbar())
-
         self.page_stack = QStackedWidget()
         self.page_stack.addWidget(self._build_dashboard())
-        self.page_stack.addWidget(self._build_packages_page())
-        self.page_stack.addWidget(self._build_cases_page())
-        self.page_stack.addWidget(
-            self._build_placeholder_page("Key management", "Review protected key material and recovery readiness.")
-        )
+        self.page_stack.addWidget(self._build_batch_page())
+        self.page_stack.addWidget(self._build_lookup_page())
+        self.page_stack.addWidget(self._build_registry_page())
         self.page_stack.addWidget(self._build_settings_page())
         content_layout.addWidget(self.page_stack, 1)
         content_layout.addWidget(self._build_status_bar())
@@ -99,28 +97,21 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(20, 24, 20, 18)
         layout.setSpacing(8)
-
         brand_row = QHBoxLayout()
-        mark = QLabel("MK", objectName="brandMark", alignment=Qt.AlignmentFlag.AlignCenter)
-        brand_row.addWidget(mark)
+        brand_row.addWidget(QLabel("MK", objectName="brandMark", alignment=Qt.AlignmentFlag.AlignCenter))
         brand_text = QVBoxLayout()
         brand_text.setSpacing(0)
         brand_text.addWidget(QLabel("MolKey", objectName="brandName"))
-        brand_text.addWidget(QLabel("Secure Package Registry", objectName="brandSubtitle"))
+        brand_text.addWidget(QLabel("Patient Key Registry", objectName="brandSubtitle"))
         brand_row.addLayout(brand_text)
         layout.addLayout(brand_row)
         layout.addSpacing(28)
-
-        for index, label in enumerate(["Dashboard", "Packages", "Cases", "Key management"]):
-            button = self._navigation_button(label, index)
-            layout.addWidget(button)
-
+        for index, label in enumerate(["Dashboard", "Batch generation", "Lookup", "Key registry"]):
+            layout.addWidget(self._navigation_button(label, index))
         layout.addItem(QSpacerItem(1, 1, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
-        settings_button = self._navigation_button("Settings", 4)
-        layout.addWidget(settings_button)
+        layout.addWidget(self._navigation_button("Settings", 4))
         layout.addSpacing(14)
         badge = QLabel("SECURE WORKSPACE", objectName="environmentBadge")
-
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(badge)
         layout.addSpacing(8)
@@ -131,17 +122,14 @@ class MainWindow(QMainWindow):
         button = QPushButton(label)
         button.setProperty("nav", True)
         button.setProperty("active", index == 0)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.clicked.connect(self._make_navigation_handler(index))
         self.navigation_buttons.append(button)
         return button
 
     def _make_navigation_handler(self, index: int) -> Callable[[], None]:
         def navigate() -> None:
-            if index == 1:
-                self._refresh_packages()
-            elif index == 2:
-                self._refresh_cases()
+            if index == 3:
+                self._refresh_registry()
             self.page_stack.setCurrentIndex(index)
             self.page_title.setText(self.page_metadata[index][0])
             self.page_description.setText(self.page_metadata[index][1])
@@ -149,7 +137,6 @@ class MainWindow(QMainWindow):
                 button.setProperty("active", item_index == index)
                 button.style().unpolish(button)
                 button.style().polish(button)
-
         return navigate
 
     def _build_topbar(self) -> QFrame:
@@ -157,46 +144,71 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(topbar)
         layout.setContentsMargins(32, 18, 32, 18)
         titles = QVBoxLayout()
-        titles.setSpacing(2)
         self.page_title = QLabel("Dashboard", objectName="pageTitle")
-        self.page_description = QLabel("Secure package activity at a glance", objectName="pageDescription")
+        self.page_description = QLabel(self.page_metadata[0][1], objectName="pageDescription")
         titles.addWidget(self.page_title)
         titles.addWidget(self.page_description)
         layout.addLayout(titles)
         layout.addStretch()
         help_button = QPushButton("Help", objectName="helpButton")
         help_button.setProperty("secondary", True)
-        help_button.setToolTip("Open the MolKey getting started guide")
         help_button.clicked.connect(self._open_help_dialog)
         layout.addWidget(help_button)
-        self.create_package_button = QPushButton("Create package", objectName="createPackageButton")
-        self.create_package_button.setAccessibleName("Create a secure package")
-        self.create_package_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.create_package_button.setEnabled(self.package_service is not None and self.registry_connected)
-        self.create_package_button.setToolTip("Create a pseudonymous package draft")
-        self.create_package_button.clicked.connect(self._open_create_package_dialog)
-        layout.addWidget(self.create_package_button)
+        self.generate_key_button = QPushButton("Generate key", objectName="generateKeyButton")
+        self.generate_key_button.setAccessibleName("Generate or retrieve a permanent patient key")
+        self.generate_key_button.setEnabled(self.key_service is not None and self.registry_connected)
+        self.generate_key_button.clicked.connect(self._open_generate_key_dialog)
+        layout.addWidget(self.generate_key_button)
         return topbar
+
+    def _build_dashboard(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(32, 28, 32, 28)
+        layout.setSpacing(20)
+        notice = QFrame(objectName="privacyNotice")
+        notice_layout = QHBoxLayout(notice)
+        notice_layout.addWidget(QLabel("i", objectName="privacyIcon"))
+        self.privacy_notice = QLabel(
+            "Patient identifiers stay inside the registry. External exports contain generated MolKeys only.",
+            objectName="privacyText",
+        )
+        notice_layout.addWidget(self.privacy_notice, 1)
+        layout.addWidget(notice)
+        card = QFrame(objectName="contentCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(28, 28, 28, 28)
+        card_layout.addWidget(QLabel("Permanent patient pseudonyms", objectName="pageTitle"))
+        description = QLabel(
+            "Enter one patient ID to generate a new MolKey or retrieve the permanent key already assigned. "
+            "Use Batch generation for lists from the clipboard or CSV files.",
+            objectName="settingsHelp",
+        )
+        description.setWordWrap(True)
+        card_layout.addWidget(description)
+        card_layout.addSpacing(12)
+        action = QPushButton("Generate or retrieve key", objectName="dashboardGenerateButton")
+        action.setEnabled(self.key_service is not None and self.registry_connected)
+        action.clicked.connect(self._open_generate_key_dialog)
+        card_layout.addWidget(action)
+        card_layout.addStretch()
+        layout.addWidget(card, 1)
+        return page
 
     def _open_help_dialog(self) -> None:
         dialog = QDialog(self, objectName="helpDialog")
         dialog.setWindowTitle("MolKey help")
-        dialog.setMinimumWidth(560)
+        dialog.setMinimumWidth(580)
         layout = QVBoxLayout(dialog)
-        layout.setSpacing(14)
         layout.addWidget(QLabel("Getting started with MolKey", objectName="pageTitle"))
         help_text = QLabel(
-            "<b>1. Configure the registry</b><br>"
-            "Open Settings and select the approved secure shared folder. "
-            "The database is created automatically when MolKey connects; you do not create it manually.<br><br>"
-            "<b>2. Confirm the connection</b><br>"
-            "MolKey initializes the registry immediately. Confirm that the status bar says "
-            "Registry connected.<br><br>"
-            "<b>3. Create package</b><br>"
-            "When the status bar says Registry connected, select Create package, enter the patient ID and "
-            "DIT / case number, and save the draft. MolKey generates the pseudonymous package ID.<br><br>"
-            "<b>Privacy</b><br>"
-            "Patient identifiers remain in the protected registry and are not used in exported package names.",
+            "<b>1. Configure the registry</b><br>Choose the approved secure shared folder in Settings. "
+            "The database is created automatically.<br><br>"
+            "<b>2. Generate a key</b><br>Enter an internal patient ID. MolKey reuses the existing permanent "
+            "key or generates one for a new patient.<br><br>"
+            "<b>3. Process a batch</b><br>Paste patient IDs or import a CSV, review the results, then export "
+            "a CSV or JSON containing MolKeys only.<br><br>"
+            "<b>Privacy</b><br>The patient-to-key mapping remains exclusively in the protected registry.",
             objectName="helpText",
         )
         help_text.setWordWrap(True)
@@ -208,383 +220,211 @@ class MainWindow(QMainWindow):
         dialog.setModal(True)
         dialog.show()
 
-    def _open_create_package_dialog(self) -> None:
-        if self.package_service is None:
+    def _open_generate_key_dialog(self) -> None:
+        if self.key_service is None:
             return
-        dialog = QDialog(self, objectName="createPackageDialog")
-        dialog.setWindowTitle("Create package")
+        dialog = QDialog(self, objectName="generateKeyDialog")
+        dialog.setWindowTitle("Generate or retrieve key")
+        dialog.setMinimumWidth(480)
         layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel("Patient ID", objectName="fieldLabel"))
-        patient_id = QLineEdit(objectName="patientIdInput")
-        layout.addWidget(patient_id)
-        layout.addWidget(QLabel("DIT / case number", objectName="fieldLabel"))
-        case_number = QLineEdit(objectName="ditInput")
-        layout.addWidget(case_number)
-        feedback = QLabel("", objectName="statusError")
+        layout.addWidget(QLabel("Internal patient ID", objectName="fieldLabel"))
+        patient_input = QLineEdit(objectName="patientIdInput")
+        layout.addWidget(patient_input)
+        feedback = QLabel("", objectName="muted")
         layout.addWidget(feedback)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
-        save = buttons.addButton("Save draft", QDialogButtonBox.ButtonRole.AcceptRole)
-        save.setObjectName("saveDraftButton")
-        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(QLabel("MolKey", objectName="fieldLabel"))
+        output = QLineEdit(objectName="generatedKeyOutput")
+        output.setReadOnly(True)
+        layout.addWidget(output)
+        actions = QHBoxLayout()
+        generate = QPushButton("Generate or retrieve", objectName="confirmGenerateButton")
+        copy = QPushButton("Copy key", objectName="copyGeneratedKeyButton")
+        copy.setEnabled(False)
+        actions.addWidget(generate)
+        actions.addWidget(copy)
+        layout.addLayout(actions)
+        close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(dialog.reject)
+        layout.addWidget(close)
 
-        def save_draft() -> None:
+        def create() -> None:
             try:
-                self.package_service.create_draft(
-                    patient_id=patient_id.text(), case_number=case_number.text()
-                )
+                record = self.key_service.get_or_create(patient_input.text())
             except ValueError as exc:
                 feedback.setText(str(exc))
                 return
-            dialog.accept()
-            self._refresh_packages()
-            self.page_stack.setCurrentIndex(1)
-            self.page_title.setText("Packages")
+            output.setText(record.pseudonymous_key)
+            feedback.setText("Permanent key ready. The mapping is stored in the secure registry.")
+            copy.setEnabled(True)
+            self._refresh_registry()
 
-        save.clicked.connect(save_draft)
-        layout.addWidget(buttons)
+        generate.clicked.connect(create)
+        copy.clicked.connect(lambda: QGuiApplication.clipboard().setText(output.text()))
         dialog.setModal(True)
         dialog.show()
 
-    def _build_packages_page(self) -> QWidget:
+    def _build_batch_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(32, 28, 32, 28)
         card = QFrame(objectName="contentCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(22, 20, 22, 22)
-        card_layout.addWidget(QLabel("Secure packages", objectName="sectionTitle"))
+        card_layout.addWidget(QLabel("Batch key generation", objectName="sectionTitle"))
         guidance = QLabel(
-            "Create a draft, then double-click its Package ID to add files, encrypt, "
-            "verify, and export it.",
+            "Paste one patient ID per line, or import the first column of a CSV. Existing patients keep their "
+            "permanent key. Exports contain only MolKeys in the reviewed order.",
             objectName="settingsHelp",
         )
         guidance.setWordWrap(True)
         card_layout.addWidget(guidance)
-        self.packages_table = QTableWidget(0, 4, objectName="packagesTable")
-        self.packages_table.setHorizontalHeaderLabels(
-            ["Package ID", "State", "Destination", "Created"]
-        )
-        self.packages_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.packages_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.packages_table.itemDoubleClicked.connect(self._on_package_item_double_clicked)
-        card_layout.addWidget(self.packages_table)
+        self.batch_input = QTextEdit(objectName="batchPatientIdsInput")
+        self.batch_input.setPlaceholderText("PAT-001\nPAT-002\nPAT-003")
+        card_layout.addWidget(self.batch_input)
+        action_row = QHBoxLayout()
+        import_button = QPushButton("Import CSV", objectName="importBatchButton")
+        process_button = QPushButton("Process batch", objectName="processBatchButton")
+        export_button = QPushButton("Export keys", objectName="exportBatchButton")
+        export_button.setEnabled(False)
+        import_button.clicked.connect(self._import_batch_csv)
+        process_button.clicked.connect(self._process_batch)
+        export_button.clicked.connect(self._export_batch)
+        action_row.addWidget(import_button)
+        action_row.addWidget(process_button)
+        action_row.addStretch()
+        action_row.addWidget(export_button)
+        card_layout.addLayout(action_row)
+        self.batch_summary = QLabel("No batch processed", objectName="batchSummary")
+        card_layout.addWidget(self.batch_summary)
+        self.batch_results = QTableWidget(0, 2, objectName="batchResultsTable")
+        self.batch_results.setHorizontalHeaderLabels(["MolKey", "Result"])
+        self.batch_results.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        card_layout.addWidget(self.batch_results)
         layout.addWidget(card)
-        self._refresh_packages()
         return page
 
-    def _refresh_packages(self) -> None:
-        if not hasattr(self, "packages_table"):
+    def _import_batch_csv(self) -> None:
+        selected, _filter = QFileDialog.getOpenFileName(self, "Import patient IDs", "", "CSV files (*.csv)")
+        if not selected:
             return
-        packages = self.package_service.packages.list_recent() if self.package_service is not None else []
-        self.packages_table.setRowCount(len(packages))
-        for row, package in enumerate(packages):
-            values = (
-                package.package_id,
-                package.state.value,
-                package.destination or "Not set",
-                package.created_at.astimezone().strftime("%Y-%m-%d %H:%M"),
-            )
-            for column, value in enumerate(values):
-                self.packages_table.setItem(row, column, QTableWidgetItem(value))
+        values: list[str] = []
+        with Path(selected).open(newline="", encoding="utf-8-sig") as handle:
+            for row in csv.reader(handle):
+                if row:
+                    values.append(row[0])
+        self.batch_input.setPlainText("\n".join(values))
 
-    def _on_package_item_double_clicked(self, item: QTableWidgetItem) -> None:
-        """Open details for the package at the selected row."""
-        if item.column() != 0:
+    def _process_batch(self) -> None:
+        if self.key_service is None:
             return
-        self._open_package_details(item.text())
-
-    def _open_package_details(self, package_id: str) -> None:
-        """Show package workflow details and file selection actions."""
-        if self.package_service is None:
-            return
-        package = self.package_service.packages.get(package_id)
-        if package is None:
-            return
-
-        dialog = QDialog(self, objectName="packageDetailsDialog")
-        dialog.setWindowTitle(f"Package {package.package_id}")
-        dialog.setMinimumSize(680, 480)
-        layout = QVBoxLayout(dialog)
-        layout.setSpacing(14)
-
-        layout.addWidget(QLabel(package.package_id, objectName="pageTitle"))
-        layout.addWidget(QLabel(f"Status: {package.state.value}", objectName="statusGood"))
-        workflow = QLabel(
-            "1. Add files  →  2. Encrypt and verify  →  3. Export to folder",
-            objectName="settingsHelp",
+        patient_ids = self.batch_input.toPlainText().splitlines()
+        self.current_batch = self.key_service.process_batch(patient_ids)
+        self.batch_results.setRowCount(len(self.current_batch.items))
+        for row, item in enumerate(self.current_batch.items):
+            self.batch_results.setItem(row, 0, QTableWidgetItem(item.pseudonymous_key))
+            self.batch_results.setItem(row, 1, QTableWidgetItem("Ready"))
+        self.batch_summary.setText(
+            f"{self.current_batch.created_count} new · {self.current_batch.reused_count} reused · "
+            f"{self.current_batch.duplicate_count} duplicate · {self.current_batch.invalid_count} invalid"
         )
-        workflow.setWordWrap(True)
-        layout.addWidget(workflow)
-        status_text = {
-            PackageState.DRAFT: "Draft — add one or more files to continue",
-            PackageState.READY: "Ready — verified and safe to export",
-            PackageState.EXPORTED: "Exported — package delivery completed",
-        }.get(package.state, f"{package.state.value} — processing")
-        workflow_status = QLabel(status_text, objectName="packageWorkflowStatus")
-        layout.addWidget(workflow_status)
+        self.findChild(QPushButton, "exportBatchButton").setEnabled(bool(self.current_batch.items))
+        self._refresh_registry()
 
-        layout.addWidget(QLabel("Files in this package", objectName="sectionTitle"))
-        files_table = QTableWidget(0, 3, objectName="packageFilesTable")
-        files_table.setHorizontalHeaderLabels(["File", "Size", "Status"])
-        files_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        stored_files = self.package_service.package_files.list_for_package(package_id)
-        files_table.setRowCount(len(stored_files))
-        for row, item in enumerate(stored_files):
-            files_table.setItem(row, 0, QTableWidgetItem(item.export_name))
-            files_table.setItem(row, 1, QTableWidgetItem(f"{item.encrypted_size:,} bytes"))
-            files_table.setItem(row, 2, QTableWidgetItem("Encrypted and verified"))
-        layout.addWidget(files_table, 1)
-
-        action_row = QHBoxLayout()
-        add_files = QPushButton("Add files", objectName="addFilesButton")
-        add_files.setEnabled(package.state is PackageState.DRAFT)
-        add_files.setToolTip("Select one or more files to include in this package")
-        action_row.addWidget(add_files)
-        action_row.addStretch()
-        encrypt = QPushButton("Encrypt and verify", objectName="encryptPackageButton")
-        encrypt.setEnabled(False)
-        export = QPushButton("Export package", objectName="exportPackageButton")
-        export.setEnabled(package.state is PackageState.READY)
-        add_files.clicked.connect(
-            lambda: self._add_files_to_package(package.package_id, files_table, encrypt)
-        )
-        encrypt.clicked.connect(
-            lambda: self._encrypt_package(
-                package.package_id, files_table, encrypt, export, workflow_status
-            )
-        )
-        action_row.addWidget(encrypt)
-        export.clicked.connect(
-            lambda: self._export_package(package.package_id, export, workflow_status)
-        )
-        action_row.addWidget(export)
-        layout.addLayout(action_row)
-
-        close_buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        close_buttons.rejected.connect(dialog.reject)
-        layout.addWidget(close_buttons)
-        dialog.setModal(True)
-        dialog.show()
-
-    def _add_files_to_package(
-        self,
-        package_id: str,
-        files_table: QTableWidget,
-        encrypt_button: QPushButton,
-    ) -> None:
-        """Select source files and show only pseudonymous names in the UI."""
-        if self.package_service is None:
+    def _export_batch(self) -> None:
+        if self.key_service is None or self.current_batch is None:
             return
-        selected, _filter = QFileDialog.getOpenFileNames(
-            self,
-            "Select files for the secure package",
-            "",
-            "All files (*)",
+        selected, selected_filter = QFileDialog.getSaveFileName(
+            self, "Export MolKeys only", "molkeys.csv", "CSV (*.csv);;JSON (*.json)"
         )
         if not selected:
             return
-        staged = self.package_service.add_source_files(
-            package_id, [Path(item) for item in selected]
-        )
-        files_table.setRowCount(len(staged))
-        for row, item in enumerate(staged):
-            size = item.source_path.stat().st_size
-            files_table.setItem(row, 0, QTableWidgetItem(item.export_name))
-            files_table.setItem(row, 1, QTableWidgetItem(f"{size:,} bytes"))
-            files_table.setItem(row, 2, QTableWidgetItem("Selected"))
-        encrypt_button.setEnabled(bool(staged))
+        destination = Path(selected)
+        if not destination.suffix:
+            destination = destination.with_suffix(".json" if "JSON" in selected_filter else ".csv")
+        self.key_service.export_keys(self.current_batch.items, destination)
+        self.batch_summary.setText(f"Keys-only export saved to {destination}")
 
-    def _encrypt_package(
-        self,
-        package_id: str,
-        files_table: QTableWidget,
-        encrypt_button: QPushButton,
-        export_button: QPushButton,
-        status_label: QLabel,
-    ) -> None:
-        """Encrypt and verify the selected files before enabling export."""
-        if self.package_service is None:
-            return
-        encrypt_button.setEnabled(False)
-        status_label.setText("Encrypting and verifying…")
-        try:
-            self.package_service.encrypt_and_verify(package_id)
-        except (OSError, ValueError) as exc:
-            status_label.setText(f"Could not prepare package: {exc}")
-            encrypt_button.setEnabled(True)
-            return
-        for row in range(files_table.rowCount()):
-            files_table.setItem(row, 2, QTableWidgetItem("Encrypted and verified"))
-        status_label.setText("Ready — verified and safe to export")
-        export_button.setEnabled(True)
-        self._refresh_packages()
-
-    def _export_package(
-        self,
-        package_id: str,
-        export_button: QPushButton,
-        status_label: QLabel,
-    ) -> None:
-        """Ask for a folder, export verified artifacts, and show the result."""
-        if self.package_service is None:
-            return
-        selected = QFileDialog.getExistingDirectory(
-            self, "Choose export folder for the verified package"
-        )
-        if not selected:
-            return
-        export_button.setEnabled(False)
-        try:
-            exported = self.package_service.export_package(package_id, Path(selected))
-        except (OSError, ValueError) as exc:
-            status_label.setText(f"Export failed: {exc}")
-            export_button.setEnabled(True)
-            return
-        status_label.setText(f"Exported to {exported}")
-        self._refresh_packages()
-
-    def _build_cases_page(self) -> QWidget:
+    def _build_lookup_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(32, 28, 32, 28)
         card = QFrame(objectName="contentCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(22, 20, 22, 22)
-        card_layout.addWidget(QLabel("Internal case mappings", objectName="sectionTitle"))
-        self.cases_table = QTableWidget(0, 4, objectName="casesTable")
-        self.cases_table.setHorizontalHeaderLabels(
-            ["Case ID", "Patient ID", "Specimen ID", "Created"]
-        )
-        self.cases_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.cases_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        card_layout.addWidget(self.cases_table)
-        layout.addWidget(card)
-        self._refresh_cases()
-        return page
-
-    def _refresh_cases(self) -> None:
-        if not hasattr(self, "cases_table"):
-            return
-        cases = self.package_service.cases.list_recent() if self.package_service is not None else []
-        self.cases_table.setRowCount(len(cases))
-        for row, case in enumerate(cases):
-            values = (
-                case.case_id,
-                case.patient_id,
-                case.specimen_id,
-                case.created_at.astimezone().strftime("%Y-%m-%d %H:%M"),
-            )
-            for column, value in enumerate(values):
-                self.cases_table.setItem(row, column, QTableWidgetItem(value))
-
-    def _build_dashboard(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(32, 28, 32, 26)
-        layout.setSpacing(20)
-
-        notice = QFrame(objectName="privacyNotice")
-        notice_layout = QHBoxLayout(notice)
-        notice_layout.setContentsMargins(16, 12, 16, 12)
-        notice_layout.addWidget(QLabel("i", objectName="privacyIcon"))
-        self.privacy_notice = QLabel(
-            "Patient identifiers stay inside the registry. Exported package names contain only pseudonymous IDs.",
-            objectName="privacyText",
-        )
-        self.privacy_notice.setWordWrap(True)
-        notice_layout.addWidget(self.privacy_notice, 1)
-        layout.addWidget(notice)
-
-        metrics = QHBoxLayout()
-        metrics.setSpacing(16)
-        metrics.addWidget(
-            self._metric_card("READY TO EXPORT", self.metric_values["ready"], "Verified packages", "#217A58")
-        )
-        metrics.addWidget(
-            self._metric_card("IN PROCESS", self.metric_values["processing"], "Draft or encrypting", "#167D86")
-        )
-        metrics.addWidget(
-            self._metric_card("NEEDS ATTENTION", self.metric_values["attention"], "Failed or interrupted", "#A35C00")
-        )
-        layout.addLayout(metrics)
-
-        activity = QFrame(objectName="contentCard")
-        activity_layout = QVBoxLayout(activity)
-        activity_layout.setContentsMargins(22, 20, 22, 22)
-        activity_layout.setSpacing(12)
-        header = QHBoxLayout()
-        header.addWidget(QLabel("Recent packages", objectName="sectionTitle"))
-        header.addStretch()
-        search = QLineEdit()
-        search.setPlaceholderText("Search package ID…")
-        search.setAccessibleName("Search packages")
-        search.setFixedWidth(230)
-        header.addWidget(search)
-        activity_layout.addLayout(header)
-        activity_layout.addSpacing(24)
-        empty_symbol = QLabel("MK", objectName="privacyIcon", alignment=Qt.AlignmentFlag.AlignCenter)
-        activity_layout.addWidget(empty_symbol)
-        self.empty_state_title = QLabel(
-            "No packages yet", objectName="emptyStateTitle", alignment=Qt.AlignmentFlag.AlignCenter
-        )
-        activity_layout.addWidget(self.empty_state_title)
-        empty_detail = QLabel(
-            "Create the first secure package to begin the protected transfer workflow.",
-            objectName="muted",
-            alignment=Qt.AlignmentFlag.AlignCenter,
-        )
-        activity_layout.addWidget(empty_detail)
-        activity_layout.addStretch()
-        layout.addWidget(activity, 1)
-        return page
-
-    @staticmethod
-    def _metric_card(title: str, value: str, detail: str, accent: str) -> QFrame:
-        card = QFrame(objectName="metricCard")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 17, 20, 17)
-        title_label = QLabel(title, objectName="eyebrow")
-        title_label.setStyleSheet(f"color: {accent};")
-        layout.addWidget(title_label)
-        layout.addWidget(QLabel(value, objectName="metricValue"))
-        layout.addWidget(QLabel(detail, objectName="metricDetail"))
-        return card
-
-    @staticmethod
-    def _build_placeholder_page(title: str, description: str) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(32, 32, 32, 32)
-        card = QFrame(objectName="contentCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(28, 26, 28, 26)
-        card_layout.addWidget(QLabel(title, objectName="pageTitle"))
-        card_layout.addWidget(QLabel(description, objectName="pageDescription"))
+        card_layout.addWidget(QLabel("Find patient or MolKey", objectName="sectionTitle"))
+        card_layout.addWidget(QLabel("Enter an internal patient ID or a generated MolKey.", objectName="settingsHelp"))
+        self.lookup_input = QLineEdit(objectName="lookupInput")
+        card_layout.addWidget(self.lookup_input)
+        lookup_button = QPushButton("Lookup", objectName="lookupButton")
+        lookup_button.clicked.connect(self._lookup)
+        card_layout.addWidget(lookup_button)
+        self.lookup_result = QLabel("", objectName="lookupResult")
+        self.lookup_result.setWordWrap(True)
+        card_layout.addWidget(self.lookup_result)
         card_layout.addStretch()
         layout.addWidget(card)
         return page
+
+    def _lookup(self) -> None:
+        if self.key_service is None:
+            return
+        value = self.lookup_input.text().strip()
+        record = (
+            self.key_service.lookup_by_key(value)
+            if value.upper().startswith("MK-")
+            else self.key_service.lookup_by_patient(value)
+        )
+        self.lookup_result.setText(
+            f"Patient ID: {record.patient_id}    MolKey: {record.pseudonymous_key}"
+            if record is not None
+            else "No matching mapping found."
+        )
+
+    def _build_registry_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(32, 28, 32, 28)
+        card = QFrame(objectName="contentCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.addWidget(QLabel("Internal key registry", objectName="sectionTitle"))
+        warning = QLabel(
+            "Sensitive internal view: patient IDs shown here must never be copied into external exports.",
+            objectName="settingsHelp",
+        )
+        warning.setWordWrap(True)
+        card_layout.addWidget(warning)
+        self.registry_table = QTableWidget(0, 3, objectName="keyRegistryTable")
+        self.registry_table.setHorizontalHeaderLabels(["Patient ID", "MolKey", "Created"])
+        self.registry_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        card_layout.addWidget(self.registry_table)
+        layout.addWidget(card)
+        self._refresh_registry()
+        return page
+
+    def _refresh_registry(self) -> None:
+        if not hasattr(self, "registry_table"):
+            return
+        records = self.key_service.list_recent(500) if self.key_service is not None else []
+        self.registry_table.setRowCount(len(records))
+        for row, record in enumerate(records):
+            for column, value in enumerate(
+                (record.patient_id, record.pseudonymous_key, record.created_at.strftime("%Y-%m-%d %H:%M"))
+            ):
+                self.registry_table.setItem(row, column, QTableWidgetItem(value))
 
     def _build_settings_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(32, 28, 32, 28)
-        layout.setSpacing(18)
-
         card = QFrame(objectName="contentCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(26, 24, 26, 26)
-        card_layout.setSpacing(12)
         card_layout.addWidget(QLabel("Shared registry", objectName="sectionTitle"))
         help_text = QLabel(
-            "Choose the hospital's approved secure shared folder. MolKey stores the registry database, "
-            "encrypted packages, locks, and backups below this location.",
+            "Choose the hospital's approved secure shared folder. MolKey stores the SQLite database, "
+            "patient-to-key mappings, writer locks, and backups below this location.",
             objectName="settingsHelp",
         )
         help_text.setWordWrap(True)
         card_layout.addWidget(help_text)
-        card_layout.addSpacing(6)
         card_layout.addWidget(QLabel("Hospital registry folder", objectName="fieldLabel"))
-
         path_row = QHBoxLayout()
         self.registry_path_input = QLineEdit()
         self.registry_path_input.setAccessibleName("Hospital registry folder")
@@ -596,18 +436,14 @@ class MainWindow(QMainWindow):
         browse.clicked.connect(self._browse_registry_folder)
         path_row.addWidget(browse)
         card_layout.addLayout(path_row)
-
         hint = QLabel(
-            "Production requires a UNC path beginning with \\\\ or //, or a mapped "
-            "network drive (X:\\...). Do not select a personal or local folder.",
+            "Production requires a UNC path beginning with \\\\ or //, or an active mapped network drive.",
             objectName="muted",
         )
         hint.setWordWrap(True)
         card_layout.addWidget(hint)
-
         action_row = QHBoxLayout()
         self.settings_feedback = QLabel("", objectName="muted")
-        self.settings_feedback.setWordWrap(True)
         action_row.addWidget(self.settings_feedback, 1)
         save = QPushButton("Save settings", objectName="saveRegistryButton")
         save.clicked.connect(self._save_registry_folder)
@@ -627,9 +463,7 @@ class MainWindow(QMainWindow):
     def _save_registry_folder(self) -> None:
         registry_path = self.registry_path_input.text().strip()
         if not (registry_path.startswith((r"\\", "//")) or _is_mapped_drive(registry_path)):
-            self._set_settings_feedback(
-                "Enter an approved UNC network path or mapped network drive.", error=True
-            )
+            self._set_settings_feedback("Enter an approved UNC network path or mapped network drive.", error=True)
             return
         self.settings.setValue("registry/root", registry_path)
         self.settings.sync()
@@ -643,18 +477,17 @@ class MainWindow(QMainWindow):
             config.backups_dir.mkdir(parents=True, exist_ok=True)
             migrate(config.database_path)
         except (ConfigError, OSError, RuntimeError) as exc:
-            self._set_settings_feedback(
-                f"Folder saved, but MolKey could not connect: {exc}", error=True
-            )
+            self._set_settings_feedback(f"Folder saved, but MolKey could not connect: {exc}", error=True)
             return
         self.database_path = config.database_path
-        self.package_service = PackageService(config.database_path)
+        self.key_service = PatientKeyService(config.database_path)
         self.registry_connected = True
         self.connection_status.setText("Registry connected")
         self.connection_status.setObjectName("statusGood")
         self.connection_status.style().unpolish(self.connection_status)
         self.connection_status.style().polish(self.connection_status)
-        self.create_package_button.setEnabled(True)
+        self.generate_key_button.setEnabled(True)
+        self.findChild(QPushButton, "dashboardGenerateButton").setEnabled(True)
         self._set_settings_feedback("Registry connected and ready.", error=False)
 
     def _set_settings_feedback(self, text: str, *, error: bool) -> None:
@@ -667,12 +500,19 @@ class MainWindow(QMainWindow):
         status = QFrame(objectName="statusBar")
         layout = QHBoxLayout(status)
         layout.setContentsMargins(32, 10, 32, 10)
-        status_text = "Registry connected" if self.registry_connected else "Registry not connected"
-        status_object = "statusGood" if self.registry_connected else "muted"
-        self.connection_status = QLabel(status_text, objectName=status_object)
+        connected = self.registry_connected
+        self.connection_status = QLabel(
+            "Registry connected" if connected else "Registry not connected",
+            objectName="statusGood" if connected else "muted",
+        )
         layout.addWidget(self.connection_status)
         layout.addStretch()
         layout.addWidget(QLabel("Registry:", objectName="muted"))
         self.registry_path_label = QLabel(self.registry_path, objectName="statusPath")
         layout.addWidget(self.registry_path_label)
         return status
+
+
+def _keys_only(records: list[PatientKeyRecord]) -> list[str]:
+    """Return generated keys without exposing patient IDs."""
+    return [record.pseudonymous_key for record in records]

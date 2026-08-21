@@ -1,40 +1,59 @@
+import csv
+from pathlib import Path
+
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QFileDialog, QLabel, QLineEdit, QPushButton, QTableWidget
+from PyQt6.QtWidgets import (
+    QDialog,
+    QFileDialog,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTableWidget,
+    QTextEdit,
+)
 
 from molvault.infrastructure.migrations import migrate
-from molvault.infrastructure.repositories import PackageRepository
 from molvault.ui.main_window import MainWindow
 
 
-def test_main_window_has_product_identity_and_safe_unavailable_actions(qtbot):
-    window = MainWindow(registry_path=r"\\secure-drive\molvault", registry_connected=True)
+def connected_window(qtbot, tmp_path: Path) -> MainWindow:
+    db_path = tmp_path / "registry.db"
+    migrate(db_path)
+    window = MainWindow(
+        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
+    )
+    qtbot.addWidget(window)
+    return window
+
+
+def test_main_window_has_key_registry_identity_and_safe_unavailable_action(qtbot):
+    window = MainWindow(registry_path=r"\\secure-drive\molkey", registry_connected=False)
     qtbot.addWidget(window)
 
     assert window.windowTitle() == "MolKey"
     assert window.minimumWidth() >= 1100
-    assert window.findChild(QPushButton, "createPackageButton").text() == "Create package"
-    assert window.findChild(QPushButton, "createPackageButton").accessibleName() == "Create a secure package"
-    assert not window.findChild(QPushButton, "createPackageButton").isEnabled()
+    button = window.findChild(QPushButton, "generateKeyButton")
+    assert button.text() == "Generate key"
+    assert button.accessibleName() == "Generate or retrieve a permanent patient key"
+    assert not button.isEnabled()
 
 
-def test_help_button_opens_getting_started_dialog(qtbot):
+def test_help_describes_key_registry_workflow(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
 
-    help_button = window.findChild(QPushButton, "helpButton")
-    assert help_button is not None
-    assert help_button.isEnabled()
-    qtbot.mouseClick(help_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.findChild(QPushButton, "helpButton"), Qt.MouseButton.LeftButton)
 
     dialog = window.findChild(QDialog, "helpDialog")
-    assert dialog is not None
     help_text = dialog.findChild(QLabel, "helpText").text()
     assert "database is created automatically" in help_text
-    assert "Create package" in help_text
+    assert "Generate a key" in help_text
+    assert "patient-to-key mapping" in help_text
+    assert "encrypt" not in help_text.lower()
 
 
 def test_dashboard_exposes_connection_and_privacy_status(qtbot):
-    window = MainWindow(registry_path=r"\\secure-drive\molvault", registry_connected=True)
+    window = MainWindow(registry_path=r"\\secure-drive\molkey", registry_connected=True)
     qtbot.addWidget(window)
 
     assert window.connection_status.text() == "Registry connected"
@@ -42,265 +61,103 @@ def test_dashboard_exposes_connection_and_privacy_status(qtbot):
     assert "Patient identifiers stay inside the registry" in window.privacy_notice.text()
 
 
-def test_sidebar_navigation_switches_pages(qtbot):
-    window = MainWindow(registry_path=r"C:\MolVaultRegistry")
+def test_sidebar_navigation_switches_to_batch_page(qtbot):
+    window = MainWindow(registry_path=r"C:\MolKeyRegistry")
     qtbot.addWidget(window)
 
-    packages_button = window.navigation_buttons[1]
-    qtbot.mouseClick(packages_button, Qt.MouseButton.LeftButton)
+    batch_button = window.navigation_buttons[1]
+    qtbot.mouseClick(batch_button, Qt.MouseButton.LeftButton)
 
     assert window.page_stack.currentIndex() == 1
-    assert packages_button.property("active") is True
+    assert batch_button.property("active") is True
     assert window.navigation_buttons[0].property("active") is False
-    assert window.page_title.text() == "Packages"
+    assert window.page_title.text() == "Batch generation"
 
 
-def test_unconfigured_registry_is_never_reported_as_connected(qtbot):
-    window = MainWindow(registry_path="Registry not configured", registry_connected=False)
-    qtbot.addWidget(window)
+def test_single_generate_reuses_permanent_key(qtbot, tmp_path):
+    window = connected_window(qtbot, tmp_path)
+    button = window.findChild(QPushButton, "generateKeyButton")
 
-    assert window.connection_status.text() == "Registry not connected"
-
-
-def test_dashboard_summary_is_seeded_with_safe_placeholder_counts(qtbot):
-    window = MainWindow(registry_path=r"C:\MolVaultRegistry")
-    qtbot.addWidget(window)
-
-    assert window.metric_values == {"ready": "0", "processing": "0", "attention": "0"}
-    assert "No packages yet" in window.empty_state_title.text()
-
-
-def test_create_package_dialog_persists_draft(qtbot, tmp_path):
-    db_path = tmp_path / "registry.db"
-    migrate(db_path)
-    window = MainWindow(
-        registry_path=str(tmp_path),
-        registry_connected=True,
-        database_path=db_path,
-    )
-    qtbot.addWidget(window)
-
-    create_button = window.findChild(QPushButton, "createPackageButton")
-    assert create_button.isEnabled()
-    qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
-
-    dialog = window.findChild(QDialog, "createPackageDialog")
-    assert dialog is not None
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    dialog = window.findChild(QDialog, "generateKeyDialog")
     dialog.findChild(QLineEdit, "patientIdInput").setText("PAT-UI-001")
-    dialog.findChild(QLineEdit, "ditInput").setText("26OUM12287")
-    qtbot.mouseClick(dialog.findChild(QPushButton, "saveDraftButton"), Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(dialog.findChild(QPushButton, "confirmGenerateButton"), Qt.MouseButton.LeftButton)
 
-    packages = PackageRepository(db_path).list_recent()
-    assert len(packages) == 1
-    assert packages[0].package_id.startswith("SPK-")
-    assert window.page_stack.currentIndex() == 1
+    generated = dialog.findChild(QLineEdit, "generatedKeyOutput").text()
+    assert generated.startswith("MK-")
+    assert window.key_service.lookup_by_patient("PAT-UI-001").pseudonymous_key == generated
+
+    dialog.close()
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    second = window.findChild(QDialog, "generateKeyDialog")
+    second.findChild(QLineEdit, "patientIdInput").setText("PAT-UI-001")
+    qtbot.mouseClick(second.findChild(QPushButton, "confirmGenerateButton"), Qt.MouseButton.LeftButton)
+    assert second.findChild(QLineEdit, "generatedKeyOutput").text() == generated
 
 
-def test_packages_page_lists_persisted_package_without_patient_identifier(qtbot, tmp_path):
-    db_path = tmp_path / "registry.db"
-    migrate(db_path)
-    window = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
-    )
-    qtbot.addWidget(window)
-    package = window.package_service.create_draft(
-        patient_id="PAT-SECRET-001", case_number="26OUM12287"
-    )
-
+def test_batch_paste_generates_review_and_keys_only_export(qtbot, tmp_path, monkeypatch):
+    window = connected_window(qtbot, tmp_path)
     qtbot.mouseClick(window.navigation_buttons[1], Qt.MouseButton.LeftButton)
+    batch_input = window.findChild(QTextEdit, "batchPatientIdsInput")
+    batch_input.setPlainText("PAT-001\nPAT-002\nPAT-001\n")
 
-    table = window.findChild(QTableWidget, "packagesTable")
-    assert table is not None
-    assert table.rowCount() == 1
-    visible_text = " ".join(
-        table.item(0, column).text() for column in range(table.columnCount())
-    )
-    assert package.package_id in visible_text
-    assert "PAT-SECRET-001" not in visible_text
-
-
-def test_cases_page_lists_internal_patient_and_case_mapping(qtbot, tmp_path):
-    db_path = tmp_path / "registry.db"
-    migrate(db_path)
-    window = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
-    )
-    qtbot.addWidget(window)
-    window.package_service.create_draft(
-        patient_id="12345678901", case_number="26OUM12287"
-    )
-
-    qtbot.mouseClick(window.navigation_buttons[2], Qt.MouseButton.LeftButton)
-
-    table = window.findChild(QTableWidget, "casesTable")
-    assert table is not None
-    assert table.rowCount() == 1
-    visible_text = " ".join(
-        table.item(0, column).text() for column in range(table.columnCount())
-    )
-    assert "PAT-12345678901" in visible_text
-    assert "SPEC-26OUM12287" in visible_text
-
-
-def test_packages_page_opens_package_details_dialog_on_double_click(qtbot, tmp_path):
-    """Double-clicking a package row opens a details dialog for file selection."""
-    db_path = tmp_path / "registry.db"
-    migrate(db_path)
-    window = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
-    )
-    qtbot.addWidget(window)
-    package = window.package_service.create_draft(
-        patient_id="PAT-SECRET-001", case_number="26OUM12287"
-    )
-
-    qtbot.mouseClick(window.navigation_buttons[1], Qt.MouseButton.LeftButton)
-
-    table = window.findChild(QTableWidget, "packagesTable")
-    assert table is not None
-    assert table.rowCount() == 1
-
-    # Emit the same signal generated by a user double-click on the package ID.
-    table.itemDoubleClicked.emit(table.item(0, 0))
-
-    # Should open a package details dialog
-    dialog = window.findChild(QDialog, "packageDetailsDialog")
-    assert dialog is not None
-    assert dialog.windowTitle() == f"Package {package.package_id}"
-
-
-def test_package_details_dialog_has_add_files_button(qtbot, tmp_path):
-    """Package details dialog shows Add files button for draft packages."""
-    db_path = tmp_path / "registry.db"
-    migrate(db_path)
-    window = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
-    )
-    qtbot.addWidget(window)
-    window.package_service.create_draft(
-        patient_id="PAT-SECRET-001", case_number="26OUM12287"
-    )
-
-    qtbot.mouseClick(window.navigation_buttons[1], Qt.MouseButton.LeftButton)
-    table = window.findChild(QTableWidget, "packagesTable")
-    table.itemDoubleClicked.emit(table.item(0, 0))
-
-    dialog = window.findChild(QDialog, "packageDetailsDialog")
-    assert dialog is not None
-
-    # Add files button should be present and enabled for draft packages
-    add_files_button = dialog.findChild(QPushButton, "addFilesButton")
-    assert add_files_button is not None
-    assert add_files_button.isEnabled()
-    assert add_files_button.text() == "Add files"
-
-
-def test_add_files_populates_package_dialog_with_safe_names(qtbot, tmp_path, monkeypatch):
-    db_path = tmp_path / "registry.db"
-    migrate(db_path)
-    window = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
-    )
-    qtbot.addWidget(window)
-    package = window.package_service.create_draft(
-        patient_id="PAT-SECRET", case_number="26OUM12287"
-    )
-    source = tmp_path / "patient-secret-result.vcf"
-    source.write_text("variants", encoding="utf-8")
-    monkeypatch.setattr(
-        QFileDialog,
-        "getOpenFileNames",
-        staticmethod(lambda *args, **kwargs: ([str(source)], "All files (*)")),
-    )
-
-    qtbot.mouseClick(window.navigation_buttons[1], Qt.MouseButton.LeftButton)
-    table = window.findChild(QTableWidget, "packagesTable")
-    table.itemDoubleClicked.emit(table.item(0, 0))
-    dialog = window.findChild(QDialog, "packageDetailsDialog")
-    add_files_button = dialog.findChild(QPushButton, "addFilesButton")
-    qtbot.mouseClick(add_files_button, Qt.MouseButton.LeftButton)
-
-    files_table = dialog.findChild(QTableWidget, "packageFilesTable")
-    assert files_table.rowCount() == 1
-    assert files_table.item(0, 0).text() == f"{package.package_id}-001.vcf"
-    assert "SECRET" not in files_table.item(0, 0).text()
-    encrypt_button = dialog.findChild(QPushButton, "encryptPackageButton")
-    assert encrypt_button.isEnabled()
-
-
-def test_encrypt_then_export_buttons_complete_package_workflow(
-    qtbot, tmp_path, monkeypatch
-):
-    db_path = tmp_path / "registry.db"
-    migrate(db_path)
-    window = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
-    )
-    qtbot.addWidget(window)
-    package = window.package_service.create_draft(
-        patient_id="PAT-SECRET", case_number="26OUM12287"
-    )
-    source = tmp_path / "patient-secret-result.vcf"
-    source.write_text("variants", encoding="utf-8")
-    destination = tmp_path / "delivery"
-    monkeypatch.setattr(
-        QFileDialog,
-        "getOpenFileNames",
-        staticmethod(lambda *args, **kwargs: ([str(source)], "All files (*)")),
-    )
-    monkeypatch.setattr(
-        QFileDialog,
-        "getExistingDirectory",
-        staticmethod(lambda *args, **kwargs: str(destination)),
-    )
-
-    qtbot.mouseClick(window.navigation_buttons[1], Qt.MouseButton.LeftButton)
-    table = window.findChild(QTableWidget, "packagesTable")
-    table.itemDoubleClicked.emit(table.item(0, 0))
-    dialog = window.findChild(QDialog, "packageDetailsDialog")
     qtbot.mouseClick(
-        dialog.findChild(QPushButton, "addFilesButton"), Qt.MouseButton.LeftButton
+        window.findChild(QPushButton, "processBatchButton"), Qt.MouseButton.LeftButton
     )
-    encrypt_button = dialog.findChild(QPushButton, "encryptPackageButton")
-    qtbot.mouseClick(encrypt_button, Qt.MouseButton.LeftButton)
 
-    status = dialog.findChild(QLabel, "packageWorkflowStatus")
-    assert status.text() == "Ready — verified and safe to export"
-    export_button = dialog.findChild(QPushButton, "exportPackageButton")
-    assert export_button.isEnabled()
-    qtbot.mouseClick(export_button, Qt.MouseButton.LeftButton)
-
-    assert (destination / package.package_id / "manifest.json").is_file()
-    assert status.text().startswith("Exported to ")
-    assert window.package_service.packages.get(package.package_id).state.value == "Exported"
-
-
-def test_ready_package_dialog_offers_export_after_restart(qtbot, tmp_path):
-    db_path = tmp_path / "registry.db"
-    migrate(db_path)
-    first_window = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
+    table = window.findChild(QTableWidget, "batchResultsTable")
+    assert table.rowCount() == 2
+    summary = window.findChild(QLabel, "batchSummary").text()
+    assert "2 new" in summary
+    assert "1 duplicate" in summary
+    destination = tmp_path / "upload_keys.csv"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(destination), "CSV (*.csv)")),
     )
-    qtbot.addWidget(first_window)
-    package = first_window.package_service.create_draft(
-        patient_id="PAT-SECRET", case_number="26OUM12287"
+    qtbot.mouseClick(
+        window.findChild(QPushButton, "exportBatchButton"), Qt.MouseButton.LeftButton
     )
-    source = tmp_path / "result.txt"
-    source.write_text("sensitive", encoding="utf-8")
-    first_window.package_service.add_source_files(package.package_id, [source])
-    first_window.package_service.encrypt_and_verify(package.package_id)
 
-    restarted = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
-    )
-    qtbot.addWidget(restarted)
-    qtbot.mouseClick(restarted.navigation_buttons[1], Qt.MouseButton.LeftButton)
-    table = restarted.findChild(QTableWidget, "packagesTable")
-    table.itemDoubleClicked.emit(table.item(0, 0))
-    dialog = restarted.findChild(QDialog, "packageDetailsDialog")
+    with destination.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert list(rows[0]) == ["molkey"]
+    assert "PAT-001" not in destination.read_text(encoding="utf-8")
 
-    assert dialog.findChild(QLabel, "packageWorkflowStatus").text() == (
-        "Ready — verified and safe to export"
-    )
-    assert dialog.findChild(QPushButton, "exportPackageButton").isEnabled()
-    assert dialog.findChild(QTableWidget, "packageFilesTable").rowCount() == 1
+
+def test_lookup_works_in_both_directions(qtbot, tmp_path):
+    window = connected_window(qtbot, tmp_path)
+    record = window.key_service.get_or_create("PAT-LOOKUP")
+    qtbot.mouseClick(window.navigation_buttons[2], Qt.MouseButton.LeftButton)
+    lookup = window.findChild(QLineEdit, "lookupInput")
+
+    lookup.setText("PAT-LOOKUP")
+    qtbot.mouseClick(window.findChild(QPushButton, "lookupButton"), Qt.MouseButton.LeftButton)
+    assert record.pseudonymous_key in window.findChild(QLabel, "lookupResult").text()
+
+    lookup.setText(record.pseudonymous_key.lower())
+    qtbot.mouseClick(window.findChild(QPushButton, "lookupButton"), Qt.MouseButton.LeftButton)
+    assert "PAT-LOOKUP" in window.findChild(QLabel, "lookupResult").text()
+
+
+def test_registry_page_lists_internal_mapping(qtbot, tmp_path):
+    window = connected_window(qtbot, tmp_path)
+    record = window.key_service.get_or_create("PAT-INTERNAL")
+
+    qtbot.mouseClick(window.navigation_buttons[3], Qt.MouseButton.LeftButton)
+
+    table = window.findChild(QTableWidget, "keyRegistryTable")
+    visible = " ".join(table.item(0, column).text() for column in range(table.columnCount()))
+    assert "PAT-INTERNAL" in visible
+    assert record.pseudonymous_key in visible
+
+
+def test_settings_copy_mentions_only_registry_data(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    qtbot.mouseClick(window.navigation_buttons[4], Qt.MouseButton.LeftButton)
+
+    help_texts = [item.text() for item in window.findChildren(QLabel, "settingsHelp")]
+    assert any("patient-to-key mappings" in text for text in help_texts)
+    assert all("encrypted packages" not in text for text in help_texts)

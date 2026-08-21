@@ -5,7 +5,7 @@ from pathlib import Path
 
 from molvault.infrastructure.writer_lock import get_registry_root_from_db, writer_lock
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATION_001 = """
 -- Schema version table
@@ -116,6 +116,16 @@ CREATE INDEX IF NOT EXISTS idx_audit_events_package_id ON audit_events(package_i
 CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp);
 """
 
+MIGRATION_002 = """
+CREATE TABLE IF NOT EXISTS patient_keys (
+    patient_id TEXT PRIMARY KEY,
+    pseudonymous_key TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_patient_keys_key ON patient_keys(pseudonymous_key);
+"""
+
 
 def migrate(db_path: Path) -> None:
     """Apply schema migrations to the database.
@@ -141,8 +151,9 @@ def migrate(db_path: Path) -> None:
             try:
                 cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")
                 if cursor.fetchone() is None:
-                    # Fresh database - apply migration 001
+                    # Fresh database - apply all migrations.
                     conn.executescript(MIGRATION_001)
+                    conn.executescript(MIGRATION_002)
                     conn.execute(
                         "INSERT INTO schema_version (version) VALUES (?)",
                         (SCHEMA_VERSION,),
@@ -160,9 +171,11 @@ def migrate(db_path: Path) -> None:
                             "Upgrade MolVault to access this database."
                         )
 
-                    if current_version < SCHEMA_VERSION:
-                        # Apply pending migrations
+                    if current_version < 1:
                         conn.executescript(MIGRATION_001)
+                    if current_version < 2:
+                        conn.executescript(MIGRATION_002)
+                    if current_version < SCHEMA_VERSION:
                         conn.execute(
                             "UPDATE schema_version SET version = ?, applied_at = datetime('now')",
                             (SCHEMA_VERSION,),
