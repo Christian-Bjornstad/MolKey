@@ -69,6 +69,9 @@ QLabel#privacyIcon { color: #167D86; font-size: 17px; font-weight: 700; }
 QLabel#privacyText { color: #315A60; }
 QFrame#statusBar { background: white; border-top: 1px solid #D9E2EC; }
 QLabel#statusGood { color: #217A58; font-weight: 700; }
+QLabel#statusError { color: #B42318; font-weight: 700; }
+QLabel#fieldLabel { color: #243B53; font-weight: 700; }
+QLabel#settingsHelp { color: #486581; line-height: 1.4; }
 QLabel#statusPath { color: #627D98; font-family: "Cascadia Mono", "Consolas", monospace; }
 QLineEdit {
     background: white; border: 1px solid #BCCCDC; border-radius: 7px;

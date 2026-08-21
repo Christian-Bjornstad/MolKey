@@ -34,12 +34,23 @@ class RegistryConfig:
         if not registry_root:
             raise ConfigError("MOLVAULT_REGISTRY_ROOT environment variable is required for registry root")
 
-        root = Path(registry_root)
+        return cls.from_root(registry_root, validate_root=validate_root, test_mode=test_mode)
 
-        if not test_mode and not registry_root.startswith(("\\\\", "//")):
+    @classmethod
+    def from_root(
+        cls,
+        registry_root: str | Path,
+        *,
+        validate_root: bool = True,
+        test_mode: bool = False,
+    ) -> RegistryConfig:
+        """Create configuration from a UI-saved or explicitly supplied root."""
+        root_text = str(registry_root)
+        root = Path(root_text)
+
+        if not test_mode and not root_text.startswith(("\\\\", "//")):
             raise ConfigError("Production registry root must be a UNC network path")
 
-        # Validate writability always (test mode still validates path existence)
         if validate_root:
             if not root.exists():
                 raise ConfigError(f"Registry root is not accessible and writable: {root}")

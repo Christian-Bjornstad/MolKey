@@ -28,7 +28,8 @@ class PackageRecord:
     package_id: str
     case_id: str
     key_id: str
-    destination_ref: str
+    destination: str | None = None
+    destination_ref: str = "Pending"
     state: PackageState = PackageState.DRAFT
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))

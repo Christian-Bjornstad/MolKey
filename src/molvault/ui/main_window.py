@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -26,15 +27,24 @@ from molvault.ui.theme import STYLESHEET
 class MainWindow(QMainWindow):
     """Main navigation shell and privacy-conscious dashboard."""
 
-    def __init__(self, registry_path: str = "Not configured", *, registry_connected: bool = False) -> None:
+    def __init__(
+        self,
+        registry_path: str = "Not configured",
+        *,
+        registry_connected: bool = False,
+        settings: QSettings | None = None,
+    ) -> None:
         super().__init__()
-        self.registry_path = registry_path
+        self.settings = settings or QSettings()
+        saved_registry_path = str(self.settings.value("registry/root", ""))
+        self.registry_path = saved_registry_path or registry_path
         self.registry_connected = registry_connected
         self.page_metadata = [
             ("Dashboard", "Secure package activity at a glance"),
             ("Packages", "Search, review, and export secure packages"),
             ("Cases", "Manage internal case and specimen links"),
             ("Key management", "Review protected key material and recovery readiness"),
+            ("Settings", "Configure the secure shared registry folder"),
         ]
         self.metric_values = {"ready": "0", "processing": "0", "attention": "0"}
         self.navigation_buttons: list[QPushButton] = []
@@ -67,6 +77,7 @@ class MainWindow(QMainWindow):
         self.page_stack.addWidget(
             self._build_placeholder_page("Key management", "Review protected key material and recovery readiness.")
         )
+        self.page_stack.addWidget(self._build_settings_page())
         content_layout.addWidget(self.page_stack, 1)
         content_layout.addWidget(self._build_status_bar())
         root.addWidget(content, 1)
@@ -91,21 +102,29 @@ class MainWindow(QMainWindow):
         layout.addSpacing(28)
 
         for index, label in enumerate(["Dashboard", "Packages", "Cases", "Key management"]):
-            button = QPushButton(label)
-            button.setProperty("nav", True)
-            button.setProperty("active", index == 0)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.clicked.connect(self._make_navigation_handler(index))
-            self.navigation_buttons.append(button)
+            button = self._navigation_button(label, index)
             layout.addWidget(button)
 
         layout.addItem(QSpacerItem(1, 1, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        settings_button = self._navigation_button("Settings", 4)
+        layout.addWidget(settings_button)
+        layout.addSpacing(14)
         badge = QLabel("SECURE WORKSPACE", objectName="environmentBadge")
+
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(badge)
         layout.addSpacing(8)
         layout.addWidget(QLabel("MolVault 0.1.0", objectName="brandSubtitle"))
         return sidebar
+
+    def _navigation_button(self, label: str, index: int) -> QPushButton:
+        button = QPushButton(label)
+        button.setProperty("nav", True)
+        button.setProperty("active", index == 0)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(self._make_navigation_handler(index))
+        self.navigation_buttons.append(button)
+        return button
 
     def _make_navigation_handler(self, index: int) -> Callable[[], None]:
         def navigate() -> None:
@@ -230,6 +249,82 @@ class MainWindow(QMainWindow):
         card_layout.addStretch()
         layout.addWidget(card)
         return page
+
+    def _build_settings_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(32, 28, 32, 28)
+        layout.setSpacing(18)
+
+        card = QFrame(objectName="contentCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(26, 24, 26, 26)
+        card_layout.setSpacing(12)
+        card_layout.addWidget(QLabel("Shared registry", objectName="sectionTitle"))
+        help_text = QLabel(
+            "Choose the hospital's approved secure shared folder. MolVault stores the registry database, "
+            "encrypted packages, locks, and backups below this location.",
+            objectName="settingsHelp",
+        )
+        help_text.setWordWrap(True)
+        card_layout.addWidget(help_text)
+        card_layout.addSpacing(6)
+        card_layout.addWidget(QLabel("Hospital registry folder", objectName="fieldLabel"))
+
+        path_row = QHBoxLayout()
+        self.registry_path_input = QLineEdit()
+        self.registry_path_input.setAccessibleName("Hospital registry folder")
+        self.registry_path_input.setPlaceholderText(r"\\server\secure-share\MolVault")
+        self.registry_path_input.setText(self.registry_path if self.registry_path.startswith((r"\\", "//")) else "")
+        path_row.addWidget(self.registry_path_input, 1)
+        browse = QPushButton("Browse", objectName="browseRegistryButton")
+        browse.setProperty("secondary", True)
+        browse.clicked.connect(self._browse_registry_folder)
+        path_row.addWidget(browse)
+        card_layout.addLayout(path_row)
+
+        hint = QLabel(
+            "Production requires a UNC path beginning with \\\\ or //. Do not select a personal or local folder.",
+            objectName="muted",
+        )
+        hint.setWordWrap(True)
+        card_layout.addWidget(hint)
+
+        action_row = QHBoxLayout()
+        self.settings_feedback = QLabel("", objectName="muted")
+        self.settings_feedback.setWordWrap(True)
+        action_row.addWidget(self.settings_feedback, 1)
+        save = QPushButton("Save settings", objectName="saveRegistryButton")
+        save.clicked.connect(self._save_registry_folder)
+        action_row.addWidget(save)
+        card_layout.addLayout(action_row)
+        layout.addWidget(card)
+        layout.addStretch()
+        return page
+
+    def _browse_registry_folder(self) -> None:
+        selected = QFileDialog.getExistingDirectory(
+            self, "Choose hospital registry folder", self.registry_path_input.text()
+        )
+        if selected:
+            self.registry_path_input.setText(selected)
+
+    def _save_registry_folder(self) -> None:
+        registry_path = self.registry_path_input.text().strip()
+        if not registry_path.startswith((r"\\", "//")):
+            self._set_settings_feedback("Enter an approved UNC network path beginning with \\\\ or //.", error=True)
+            return
+        self.settings.setValue("registry/root", registry_path)
+        self.settings.sync()
+        self.registry_path = registry_path
+        self.registry_path_label.setText(registry_path)
+        self._set_settings_feedback("Registry folder saved.", error=False)
+
+    def _set_settings_feedback(self, text: str, *, error: bool) -> None:
+        self.settings_feedback.setText(text)
+        self.settings_feedback.setObjectName("statusError" if error else "statusGood")
+        self.settings_feedback.style().unpolish(self.settings_feedback)
+        self.settings_feedback.style().polish(self.settings_feedback)
 
     def _build_status_bar(self) -> QFrame:
         status = QFrame(objectName="statusBar")

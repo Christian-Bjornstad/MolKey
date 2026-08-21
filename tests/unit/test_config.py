@@ -64,3 +64,16 @@ class TestRegistryConfig:
 
         with pytest.raises(ConfigError, match="directory"):
             RegistryConfig.from_env()
+
+    def test_from_root_accepts_saved_unc_without_environment(self) -> None:
+        unc = r"\\hospital-server\secure-share\MolVault"
+
+        config = RegistryConfig.from_root(unc, validate_root=False)
+
+        assert str(config.root) == unc
+        assert config.database_path == Path(unc) / "molvault-registry.db"
+        assert config.is_test_mode is False
+
+    def test_from_root_rejects_saved_local_production_path(self, tmp_path: Path) -> None:
+        with pytest.raises(ConfigError, match="UNC"):
+            RegistryConfig.from_root(str(tmp_path), validate_root=False)
