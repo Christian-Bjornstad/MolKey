@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PyQt6.QtCore import QSettings, Qt
-from PyQt6.QtGui import QFont, QGuiApplication
+from PyQt6.QtGui import QFont, QGuiApplication, QIcon
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -63,11 +63,18 @@ class MainWindow(QMainWindow):
         ]
         self.navigation_buttons: list[QPushButton] = []
         self.setWindowTitle("MolKey")
+        self._set_brand_icon()
         self.setFont(QFont("Arial", 10))
         self.setMinimumSize(1100, 700)
         self.resize(1360, 840)
         self.setStyleSheet(STYLESHEET)
         self._build_ui()
+
+    def _set_brand_icon(self) -> None:
+        """Apply the MolKey Helix Key icon from the repository assets folder."""
+        asset = Path(__file__).resolve().parents[3] / "assets" / "molkey_icon_256.png"
+        if asset.is_file():
+            self.setWindowIcon(QIcon(str(asset)))
 
     def _build_ui(self) -> None:
         central = QWidget(objectName="centralWidget")

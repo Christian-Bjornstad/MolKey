@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- MolKey I - Twin Strand Bow: two intertwined strands form the key bow -->
+  <defs>
+    <linearGradient id="bgI" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#948AC8"/>
+      <stop offset="1" stop-color="#46407A"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#bgI)"/>
+  <!-- intertwined twin-strand bow -->
+  <circle cx="106" cy="82" r="25" fill="none" stroke="#FFFFFF" stroke-width="13"/>
+  <circle cx="150" cy="82" r="25" fill="none" stroke="#C9C4E8" stroke-width="13"/>
+  <!-- shaft and teeth -->
+  <line x1="128" y1="112" x2="128" y2="196" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/>
+  <line x1="134" y1="150" x2="154" y2="150" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
+  <line x1="134" y1="172" x2="148" y2="172" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
+</svg>

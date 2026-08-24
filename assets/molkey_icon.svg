@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- MolKey - Helix Key (final master v3): vertical double helix forms the key shaft -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7F6FA"/>
+      <stop offset="1" stop-color="#D9D5EC"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#tile)"/>
+
+  <!-- bow: outer ring + helix-dot hub -->
+  <circle cx="128" cy="78" r="31" fill="none" stroke="#46407A" stroke-width="13"/>
+  <circle cx="128" cy="78" r="9" fill="#847CBA"/>
+
+  <!-- twin helix strands: high contrast, exactly two crossings -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M117 114 C101 130 155 143 128 160 C105 175 149 185 129 196"
+          stroke="#9A95C6" stroke-width="11"/>
+    <path d="M139 114 C155 130 101 143 128 160 C151 175 107 185 127 196"
+          stroke="#46407A" stroke-width="11"/>
+    <!-- base-pair rungs where the strands are far apart -->
+    <g stroke="#9A95C6" stroke-width="8">
+      <line x1="115" y1="132" x2="141" y2="132"/>
+      <line x1="113" y1="178" x2="143" y2="178"/>
+    </g>
+    <!-- solid stem finishing in clearly stepped key teeth -->
+    <line x1="128" y1="192" x2="128" y2="216" stroke="#46407A" stroke-width="11"/>
+    <line x1="133" y1="200" x2="158" y2="200" stroke="#46407A" stroke-width="11"/>
+    <line x1="133" y1="214" x2="148" y2="214" stroke="#46407A" stroke-width="11"/>
+  </g>
+</svg>

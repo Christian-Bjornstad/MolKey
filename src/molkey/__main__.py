@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 from PyQt6.QtCore import QSettings
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtWidgets import QApplication
 
 from molkey.config import ConfigError, RegistryConfig
@@ -42,6 +43,9 @@ def main() -> int:
     application = QApplication(sys.argv)
     application.setApplicationName("MolKey")
     application.setOrganizationName("MolKey")
+    brand_icon = Path(__file__).resolve().parents[2] / "assets" / "molkey_icon.ico"
+    if brand_icon.is_file():
+        application.setWindowIcon(QIcon(str(brand_icon)))
     apply_palette(application)
     application.setStyleSheet(STYLESHEET)
     application.setFont(QFont("Arial", 10))

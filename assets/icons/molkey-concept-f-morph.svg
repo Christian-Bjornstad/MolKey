@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- MolKey F - Strand Morph: the key dissolves into a double helix (recommended) -->
+  <defs>
+    <linearGradient id="bgF" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#847CBA"/>
+      <stop offset="1" stop-color="#46407A"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#bgF)"/>
+  <!-- key bow -->
+  <circle cx="128" cy="76" r="29" fill="none" stroke="#FFFFFF" stroke-width="14"/>
+  <!-- solid shaft stub -->
+  <line x1="128" y1="110" x2="128" y2="130" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/>
+  <!-- strands split and weave into a helix tail -->
+  <g fill="none" stroke="#DDD9EE" stroke-width="11" stroke-linecap="round" opacity="0.92">
+    <path d="M120 136 C 98 152, 158 164, 128 178 C 102 191, 152 201, 130 214"/>
+    <path d="M136 136 C 158 152, 98 164, 128 178 C 154 191, 104 201, 126 214"/>
+  </g>
+  <!-- base pairs between the strands -->
+  <g stroke="#FFFFFF" stroke-width="6" stroke-linecap="round">
+    <line x1="116" y1="150" x2="140" y2="150"/>
+    <line x1="112" y1="178" x2="144" y2="178"/>
+    <line x1="115" y1="203" x2="141" y2="203"/>
+  </g>
+</svg>

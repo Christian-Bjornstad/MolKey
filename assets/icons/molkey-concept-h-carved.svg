@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- MolKey H - Carved Helix: a braided double helix carved into the key shaft -->
+  <defs>
+    <linearGradient id="bgH" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A3564"/>
+      <stop offset="1" stop-color="#2D2950"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#bgH)"/>
+  <!-- solid key silhouette -->
+  <circle cx="128" cy="82" r="38" fill="#F7F6FA"/>
+  <circle cx="128" cy="82" r="14" fill="#33305E"/>
+  <rect x="116" y="116" width="24" height="94" rx="10" fill="#F7F6FA"/>
+  <rect x="140" y="164" width="23" height="14" rx="6" fill="#F7F6FA"/>
+  <rect x="140" y="189" width="17" height="14" rx="6" fill="#F7F6FA"/>
+  <!-- braided helix carved through the shaft -->
+  <path d="M128 124 C 117 134, 139 143, 128 153 C 117 163, 139 172, 128 182 C 121 189, 133 197, 128 205"
+        fill="none" stroke="#33305E" stroke-width="7" stroke-linecap="round"/>
+  <path d="M128 124 C 139 134, 117 143, 128 153 C 139 163, 117 172, 128 182 C 135 189, 123 197, 128 205"
+        fill="none" stroke="#847CBA" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+</svg>

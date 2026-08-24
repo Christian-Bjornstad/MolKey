@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- MolKey - Helix Key small-size variant: simplified for 64/32/16 px rendering -->
+  <defs>
+    <linearGradient id="tileS" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7F6FA"/>
+      <stop offset="1" stop-color="#D9D5EC"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#tileS)"/>
+
+  <!-- bow ring -->
+  <circle cx="128" cy="76" r="30" fill="none" stroke="#46407A" stroke-width="15"/>
+
+  <!-- straight shaft with two bold DNA rungs -->
+  <g stroke-linecap="round">
+    <line x1="128" y1="106" x2="128" y2="212" stroke="#46407A" stroke-width="14"/>
+    <line x1="104" y1="136" x2="152" y2="136" stroke="#9A95C6" stroke-width="10"/>
+    <line x1="104" y1="168" x2="152" y2="168" stroke="#9A95C6" stroke-width="10"/>
+    <!-- stepped teeth -->
+    <line x1="135" y1="188" x2="162" y2="188" stroke="#46407A" stroke-width="12"/>
+    <line x1="135" y1="210" x2="150" y2="210" stroke="#46407A" stroke-width="12"/>
+  </g>
+</svg>
