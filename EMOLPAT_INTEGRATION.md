@@ -77,9 +77,11 @@ Add a pinned component (pin the commit you actually release from):
 ### 3.3 Icon asset
 
 Add `src/emolpat/ui/resources/molkey.png` (the other modules use PNG;
-LVMS uses SVG). Export source lives in MolKey at
-`assets/icons/molkey-concept-a-keyhole.svg` (concept A is the recommended mark).
-Render at 512×512 onto transparency for the card, matching existing assets.
+LVMS uses SVG). The finalized brand mark is the **Helix Key** design; render
+sources live in MolKey at `assets/molkey_icon.svg` (master) and
+`assets/molkey_icon_small.svg` (simplified 64/32/16 px variant). Pre-rendered
+`molkey_icon_256.png` and a multi-resolution `molkey_icon.ico` are already in
+`assets/` — copy the 256 px PNG for the portal card.
 
 ### 3.4 Release requirements
 
