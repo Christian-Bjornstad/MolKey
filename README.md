@@ -1,4 +1,5 @@
 <p align="center">
+  <img src="assets/molkey_icon_256.png" alt="MolKey Helix Key icon" width="128" />
   <h1 align="center">MolKey</h1>
   <p align="center"><em>Permanent patient pseudonym keys for molecular pathology</em></p>
 </p>
@@ -89,11 +90,19 @@ src/molkey/
   generate keys simultaneously.
 - **Theming:** explicit dialog/messagebox/tooltip styles plus an application-wide
   fixed light palette so Windows dark mode can never produce unreadable popups.
+- **Icon:** the "Helix Key" brand mark — a double helix forming the key shaft.
+  Masters: `assets/molkey_icon.svg` (full detail) and `assets/molkey_icon_small.svg`
+  (simplified 64/32/16 px variant). Regenerate the PNG set and `molkey_icon.ico`
+  with:
+
+  ```bash
+  uv run python scripts/render_icons.py
+  ```
 
 ## Development and testing
 
 ```bash
-uv run pytest -q        # 107 tests (unit + integration + Qt UI)
+uv run pytest -q        # 110 tests (unit + integration + Qt UI)
 uv run ruff check .     # lint
 uv run mypy src         # strict type check
 uv run python scripts/qualify_smb.py   # optional: SMB concurrency qualification
