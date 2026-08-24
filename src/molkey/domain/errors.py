@@ -1,4 +1,4 @@
-"""Domain errors for MolVault."""
+"""Domain errors for MolKey."""
 
 
 class InvalidStateTransition(Exception):

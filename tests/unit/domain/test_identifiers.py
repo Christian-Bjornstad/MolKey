@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from molvault.domain.identifiers import generate_key_id, generate_package_id
+from molkey.domain.identifiers import generate_key_id, generate_package_id
 
 
 def test_package_id_uses_injected_year_and_uppercase_random_component():

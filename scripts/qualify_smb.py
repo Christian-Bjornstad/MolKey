@@ -1,4 +1,4 @@
-"""Qualify MolVault SQLite concurrency on the configured registry share.
+"""Qualify MolKey SQLite concurrency on the configured registry share.
 
 This script intentionally uses non-PHI synthetic records. Run from two
 workstations against the same UNC registry root before production release.
@@ -12,8 +12,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from molvault.infrastructure.database import connect, transaction
-from molvault.infrastructure.migrations import migrate
+from molkey.infrastructure.database import connect, transaction
+from molkey.infrastructure.migrations import migrate
 
 
 def _writer(db_path: Path, worker: int, writes: int, result_queue: Any) -> None:

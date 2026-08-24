@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- MolKey Concept A - Keyhole Helix (recommended) -->
+  <defs>
+    <linearGradient id="bgA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#948AC8"/>
+      <stop offset="1" stop-color="#5E5794"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#bgA)"/>
+  <!-- keyhole bow -->
+  <circle cx="128" cy="112" r="46" fill="#FFFFFF"/>
+  <circle cx="128" cy="112" r="17" fill="#6C64A4"/>
+  <!-- sequence rungs inside the bow -->
+  <g stroke="#FFFFFF" stroke-width="7" stroke-linecap="round">
+    <line x1="98" y1="96" x2="158" y2="96" opacity="0.95"/>
+    <line x1="94" y1="114" x2="162" y2="114" opacity="0.85"/>
+    <line x1="100" y1="132" x2="156" y2="132" opacity="0.75"/>
+  </g>
+  <!-- keyhole stem -->
+  <path d="M118 150 L138 150 L146 208 L110 208 Z" fill="#FFFFFF"/>
+</svg>

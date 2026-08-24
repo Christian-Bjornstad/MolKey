@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from molvault.infrastructure.writer_lock import (
+from molkey.infrastructure.writer_lock import (
     RegistryBusyError,
     WriterLock,
     get_registry_root_from_db,

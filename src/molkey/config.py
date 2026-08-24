@@ -40,14 +40,14 @@ class RegistryConfig:
     def from_env(cls, *, validate_root: bool = True) -> RegistryConfig:
         """Load configuration from environment variables.
 
-        Production: requires MOLVAULT_REGISTRY_ROOT pointing to writable UNC path.
-        Test: requires MOLVAULT_REGISTRY_ROOT + MOLVAULT_TEST_MODE=1 for local temporary roots.
+        Production: requires MOLKEY_REGISTRY_ROOT pointing to writable UNC path.
+        Test: requires MOLKEY_REGISTRY_ROOT + MOLKEY_TEST_MODE=1 for local temporary roots.
         """
-        registry_root = os.environ.get("MOLVAULT_REGISTRY_ROOT")
-        test_mode = os.environ.get("MOLVAULT_TEST_MODE") == "1"
+        registry_root = os.environ.get("MOLKEY_REGISTRY_ROOT")
+        test_mode = os.environ.get("MOLKEY_TEST_MODE") == "1"
 
         if not registry_root:
-            raise ConfigError("MOLVAULT_REGISTRY_ROOT environment variable is required for registry root")
+            raise ConfigError("MOLKEY_REGISTRY_ROOT environment variable is required for registry root")
 
         return cls.from_root(registry_root, validate_root=validate_root, test_mode=test_mode)
 
@@ -79,7 +79,7 @@ class RegistryConfig:
 
         return cls(
             root=root,
-            database_path=root / "molvault-registry.db",
+            database_path=root / "molkey-registry.db",
             packages_dir=root / "packages",
             staging_dir=root / "staging",
             locks_dir=root / "locks",

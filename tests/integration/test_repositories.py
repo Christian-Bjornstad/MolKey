@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from molvault.domain.models import CaseRecord, PackageRecord
-from molvault.domain.states import PackageState
-from molvault.infrastructure.migrations import migrate
-from molvault.infrastructure.repositories import (
+from molkey.domain.models import CaseRecord, PackageRecord
+from molkey.domain.states import PackageState
+from molkey.infrastructure.migrations import migrate
+from molkey.infrastructure.repositories import (
     CaseRepository,
     DuplicateRecordError,
     PackageRepository,

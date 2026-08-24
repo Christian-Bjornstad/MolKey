@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "molvault"
-version = "0.1.0"
-description = "Secure Package Registry for molecular pathology"
+name = "molkey"
+version = "0.2.0"
+description = "MolKey - permanent patient pseudonym registry for molecular pathology"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 license = { text = "Proprietary" }
@@ -26,10 +26,10 @@ dev = [
 ]
 
 [project.scripts]
-molvault = "molvault.__main__:main"
+molkey = "molkey.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/molvault"]
+packages = ["src/molkey"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
@@ -48,10 +48,10 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 python_version = "3.11"
 strict = true
 mypy_path = "src"
-packages = ["molvault"]
+packages = ["molkey"]
 
 [[tool.mypy.overrides]]
-module = "molvault.ui.*"
+module = "molkey.ui.*"
 # PyQt6's runtime accepts Qt property keywords that its type stubs omit.
 disable_error_code = ["call-arg", "call-overload", "union-attr"]
 

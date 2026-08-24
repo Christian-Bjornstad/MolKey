@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- MolKey Concept D - Shield Key (privacy emphasis) -->
+  <defs>
+    <linearGradient id="bgD" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A3564"/>
+      <stop offset="1" stop-color="#2D2950"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#bgD)"/>
+  <path d="M128 42 L198 68 L198 128 C198 176 166 204 128 218 C90 204 58 176 58 128 L58 68 Z
+           fill="#847CBA" opacity="0.28"/>
+  <path d="M128 42 L198 68 L198 128 C198 176 166 204 128 218 C90 204 58 176 58 128 L58 68 Z"
+        fill="none" stroke="#B8B4D8" stroke-width="6"/>
+  <!-- key glyph -->
+  <g stroke="#FFFFFF" stroke-linecap="round" fill="none">
+    <circle cx="128" cy="106" r="26" stroke-width="13"/>
+    <line x1="128" y1="132" x2="128" y2="184" stroke-width="13"/>
+    <line x1="128" y1="168" x2="148" y2="168" stroke-width="11"/>
+    <line x1="128" y1="184" x2="142" y2="184" stroke-width="11"/>
+  </g>
+</svg>

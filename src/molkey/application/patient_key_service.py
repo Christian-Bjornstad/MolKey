@@ -6,7 +6,7 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
-from molvault.infrastructure.repositories import PatientKeyRecord, PatientKeyRepository
+from molkey.infrastructure.repositories import PatientKeyRecord, PatientKeyRepository
 
 
 @dataclass(frozen=True)

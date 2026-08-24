@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from molvault.infrastructure.database import DatabaseError, connect
-from molvault.infrastructure.migrations import migrate
+from molkey.infrastructure.database import DatabaseError, connect
+from molkey.infrastructure.migrations import migrate
 
 
 class TestDatabaseSettings:

@@ -2,8 +2,8 @@ import csv
 import json
 from pathlib import Path
 
-from molvault.application.patient_key_service import PatientKeyService
-from molvault.infrastructure.migrations import migrate
+from molkey.application.patient_key_service import PatientKeyService
+from molkey.infrastructure.migrations import migrate
 
 
 def test_generate_key_reuses_permanent_key_for_existing_patient(tmp_path: Path) -> None:

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from molvault.domain.models import CaseRecord, PackageRecord
-from molvault.infrastructure.migrations import migrate
-from molvault.infrastructure.repositories import (
+from molkey.domain.models import CaseRecord, PackageRecord
+from molkey.infrastructure.migrations import migrate
+from molkey.infrastructure.repositories import (
     CaseRepository,
     DestinationRecord,
     DestinationRepository,

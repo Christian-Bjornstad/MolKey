@@ -1,9 +1,9 @@
-"""Domain models for MolVault."""
+"""Domain models for MolKey."""
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from molvault.domain.states import PackageState
+from molkey.domain.states import PackageState
 
 
 @dataclass(frozen=True)

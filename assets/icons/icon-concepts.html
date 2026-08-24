@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MolKey icon concepts</title>
+<style>
+  :root {
+    --foreground: #1c1c22; --muted-foreground: #6b6b78; --accent: #847cba;
+    --border: #e2e0ee; --card: #ffffff;
+  }
+  body { margin: 0; padding: 20px 24px; font-family: "Segoe UI", Arial, sans-serif;
+         color: var(--foreground); background: transparent; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  p.sub { color: var(--muted-foreground); font-size: 13px; margin: 0 0 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card img { width: 128px; height: 128px; display: block; margin: 0 auto 10px; }
+  .card img.small { width: 48px; height: 48px; margin-bottom: 0; }
+  .row { display: flex; align-items: baseline; gap: 8px; justify-content: center; margin-bottom: 10px; }
+  .name { font-weight: 700; font-size: 14px; }
+  .badge { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700;
+           border-radius: 9px; padding: 2px 9px; }
+  .desc { color: var(--muted-foreground); font-size: 12.5px; line-height: 1.45; text-align: center; }
+  .sizes { display: flex; gap: 10px; justify-content: center; align-items: flex-end; margin-top: 12px; }
+  .dark { background: #23233a; border-radius: 10px; padding: 8px; }
+</style>
+</head>
+<body>
+  <h1>MolKey app icon — four concepts</h1>
+  <p class="sub">Brand purple #847CBA · shown at 128 px and small sizes on light and dark surfaces.</p>
+  <div class="grid">
+    <div class="card">
+      <img src="molkey-concept-a-keyhole.svg" alt="Concept A keyhole helix">
+      <div class="row"><span class="name">A · Keyhole Helix</span><span class="badge">Recommended</span></div>
+      <div class="desc">Keyhole bow filled with sequence rungs — “the patient’s permanent key” in one glyph. Strong at every size.</div>
+      <div class="sizes"><img class="small" src="molkey-concept-a-keyhole.svg" alt=""><span class="dark"><img class="small" src="molkey-concept-a-keyhole.svg" alt=""></span></div>
+    </div>
+    <div class="card">
+      <img src="molkey-concept-b-monogram.svg" alt="Concept B MK monogram key">
+      <div class="row"><span class="name">B · MK Key Monogram</span></div>
+      <div class="desc">Classic sideways key with an “MK” monogram bow. Instantly reads as a key; friendly and literal.</div>
+      <div class="sizes"><img class="small" src="molkey-concept-b-monogram.svg" alt=""><span class="dark"><img class="small" src="molkey-concept-b-monogram.svg" alt=""></span></div>
+    </div>
+    <div class="card">
+      <img src="molkey-concept-c-helixkey.svg" alt="Concept C helix key">
+      <div class="row"><span class="name">C · Helix Key</span></div>
+      <div class="desc">A vertical double helix forming the key shaft — most “molecular”, lighter feel on a pale tile.</div>
+      <div class="sizes"><img class="small" src="molkey-concept-c-helixkey.svg" alt=""><span class="dark"><img class="small" src="molkey-concept-c-helixkey.svg" alt=""></span></div>
+    </div>
+    <div class="card">
+      <img src="molkey-concept-d-shield.svg" alt="Concept D shield key">
+      <div class="row"><span class="name">D · Shield Key</span></div>
+      <div class="desc">Dark privacy-forward shield with key glyph — emphasizes confidentiality over molecular identity.</div>
+      <div class="sizes"><img class="small" src="molkey-concept-d-shield.svg" alt=""><span class="dark"><img class="small" src="molkey-concept-d-shield.svg" alt=""></span></div>
+    </div>
+  </div>
+</body>
+</html>

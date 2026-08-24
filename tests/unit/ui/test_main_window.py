@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QTextEdit,
 )
 
-from molvault.infrastructure.migrations import migrate
-from molvault.ui.main_window import MainWindow
+from molkey.infrastructure.migrations import migrate
+from molkey.ui.main_window import MainWindow
 
 
 def connected_window(qtbot, tmp_path: Path) -> MainWindow:

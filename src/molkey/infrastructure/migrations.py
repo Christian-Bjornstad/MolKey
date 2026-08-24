@@ -1,9 +1,9 @@
-"""Schema migrations for MolVault registry."""
+"""Schema migrations for MolKey registry."""
 
 import sqlite3
 from pathlib import Path
 
-from molvault.infrastructure.writer_lock import get_registry_root_from_db, writer_lock
+from molkey.infrastructure.writer_lock import get_registry_root_from_db, writer_lock
 
 SCHEMA_VERSION = 2
 
@@ -168,7 +168,7 @@ def migrate(db_path: Path) -> None:
                         raise RuntimeError(
                             "Database schema version "
                             f"{current_version} is newer than supported version {SCHEMA_VERSION}. "
-                            "Upgrade MolVault to access this database."
+                            "Upgrade MolKey to access this database."
                         )
 
                     if current_version < 1:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from molvault.infrastructure.migrations import SCHEMA_VERSION, migrate
+from molkey.infrastructure.migrations import SCHEMA_VERSION, migrate
 
 
 class TestMigrations:
@@ -230,7 +230,7 @@ class TestMigrations:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "registry.db"
             # Create the lock file by acquiring it
-            from molvault.infrastructure.writer_lock import writer_lock
+            from molkey.infrastructure.writer_lock import writer_lock
 
             with writer_lock(Path(tmpdir), timeout=5.0):
                 # While lock is held, migration should block

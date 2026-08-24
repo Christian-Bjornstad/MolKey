@@ -2,9 +2,9 @@ from dataclasses import fields
 
 import pytest
 
-from molvault.domain.errors import InvalidStateTransition
-from molvault.domain.models import CaseRecord, PackageRecord
-from molvault.domain.states import PackageState
+from molkey.domain.errors import InvalidStateTransition
+from molkey.domain.models import CaseRecord, PackageRecord
+from molkey.domain.states import PackageState
 
 
 @pytest.mark.parametrize(

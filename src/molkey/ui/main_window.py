@@ -28,11 +28,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from molvault.application.patient_key_service import BatchResult, PatientKeyService
-from molvault.config import ConfigError, RegistryConfig, _is_mapped_drive
-from molvault.infrastructure.migrations import migrate
-from molvault.infrastructure.repositories import PatientKeyRecord
-from molvault.ui.theme import STYLESHEET
+from molkey.application.patient_key_service import BatchResult, PatientKeyService
+from molkey.config import ConfigError, RegistryConfig, _is_mapped_drive
+from molkey.infrastructure.migrations import migrate
+from molkey.infrastructure.repositories import PatientKeyRecord
+from molkey.ui.theme import STYLESHEET
 
 
 class MainWindow(QMainWindow):

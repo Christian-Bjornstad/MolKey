@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from molvault.infrastructure.migrations import SCHEMA_VERSION, get_schema_version, migrate
+from molkey.infrastructure.migrations import SCHEMA_VERSION, get_schema_version, migrate
 
 
 class DatabaseError(Exception):
@@ -77,7 +77,7 @@ def transaction(
     Busy errors while beginning the transaction use bounded exponential
     backoff. Once control is yielded to the caller, the body is never replayed.
     """
-    from molvault.infrastructure.writer_lock import writer_lock
+    from molkey.infrastructure.writer_lock import writer_lock
 
     if max_retries < 0:
         raise ValueError("max_retries must be zero or greater")

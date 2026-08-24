@@ -1,6 +1,6 @@
 # SQLite-on-SMB qualification gate
 
-MolVault's shared SQLite registry is **not production-approved** until this gate passes on the actual hospital UNC share from at least two authorized workstations.
+MolKey's shared SQLite registry is **not production-approved** until this gate passes on the actual hospital UNC share from at least two authorized workstations.
 
 ## Safety
 
@@ -14,7 +14,7 @@ MolVault's shared SQLite registry is **not production-approved** until this gate
 From workstation A:
 
 ```bash
-uv run python scripts/qualify_smb.py "//server/secure-share/MolVault" --workers 4 --writes 25
+uv run python scripts/qualify_smb.py "//server/secure-share/MolKey" --workers 4 --writes 25
 ```
 
 Repeat from workstation B while workstation A is still running, increasing `--writes` if necessary to overlap the runs.

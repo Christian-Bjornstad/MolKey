@@ -1,4 +1,4 @@
-"""Package workflow states for MolVault."""
+"""Package workflow states for MolKey."""
 
 from enum import StrEnum
 
@@ -32,7 +32,7 @@ class PackageState(StrEnum):
     def require_transition_to(self, next_state: "PackageState") -> "PackageState":
         """Transition to next_state, raising if not allowed."""
         if not self.can_transition_to(next_state):
-            from molvault.domain.errors import InvalidStateTransition
+            from molkey.domain.errors import InvalidStateTransition
 
             raise InvalidStateTransition(f"Cannot transition from {self.value} to {next_state.value}")
         return next_state

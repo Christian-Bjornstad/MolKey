@@ -9,15 +9,16 @@ from PyQt6.QtCore import QSettings
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication
 
-from molvault.config import ConfigError, RegistryConfig
-from molvault.infrastructure.migrations import migrate
-from molvault.ui.main_window import MainWindow
+from molkey.config import ConfigError, RegistryConfig
+from molkey.infrastructure.migrations import migrate
+from molkey.ui.main_window import MainWindow
+from molkey.ui.theme import STYLESHEET, apply_palette
 
 
 def resolve_registry_config(settings: QSettings, *, validate_root: bool = True) -> RegistryConfig | None:
     """Resolve registry configuration, preferring managed environment settings."""
     try:
-        if os.environ.get("MOLVAULT_REGISTRY_ROOT"):
+        if os.environ.get("MOLKEY_REGISTRY_ROOT"):
             return RegistryConfig.from_env(validate_root=validate_root)
         saved_root = str(settings.value("registry/root", "")).strip()
         if saved_root:
@@ -41,6 +42,8 @@ def main() -> int:
     application = QApplication(sys.argv)
     application.setApplicationName("MolKey")
     application.setOrganizationName("MolKey")
+    apply_palette(application)
+    application.setStyleSheet(STYLESHEET)
     application.setFont(QFont("Arial", 10))
     settings = QSettings()
     config = resolve_registry_config(settings)

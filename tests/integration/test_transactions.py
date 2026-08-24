@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from molvault.infrastructure.database import DatabaseError, connect, transaction
-from molvault.infrastructure.migrations import migrate
+from molkey.infrastructure.database import DatabaseError, connect, transaction
+from molkey.infrastructure.migrations import migrate
 
 
 def test_transaction_commits_successful_write(tmp_path: Path) -> None:

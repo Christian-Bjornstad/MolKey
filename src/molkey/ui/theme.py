@@ -1,5 +1,8 @@
 """MolKey visual design tokens and application stylesheet."""
 
+from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtWidgets import QApplication
+
 COLORS = {
     "primary": "#847CBA",
     "primary_hover": "#746CA8",
@@ -89,4 +92,49 @@ QHeaderView::section {
     background: #EFEEF6; padding: 9px; border: none;
     border-bottom: 1px solid #D0CEE8; font-weight: 700;
 }
+QDialog, QMessageBox {
+    background: #F7F6FA;
+    color: #2D2950;
+}
+QDialog QLabel { color: #2D2950; background: transparent; }
+QMessageBox QLabel { color: #2D2950; background: transparent; }
+QDialog QPushButton, QMessageBox QPushButton {
+    background: white; color: #2D2950; border: 1px solid #B8B4D8;
+    border-radius: 7px; padding: 8px 16px; font-weight: 600; min-width: 72px;
+}
+QDialog QPushButton:hover, QMessageBox QPushButton:hover {
+    background: #EFEEF6; border-color: #9894C0;
+}
+QDialog QLineEdit, QDialog QPlainTextEdit, QDialog QTextEdit {
+    background: white; color: #2D2950; border: 1px solid #B8B4D8;
+    border-radius: 7px; padding: 9px 12px;
+}
+QToolTip {
+    background: white; color: #2D2950; border: 1px solid #B8B4D8;
+    padding: 5px; border-radius: 4px;
+}
 """
+
+def build_palette() -> QPalette:
+    """Return a fixed light palette so dark system schemes never bleed through."""
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window, QColor(COLORS["canvas"]))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(COLORS["text"]))
+    palette.setColor(QPalette.ColorRole.Base, QColor("#FFFFFF"))
+    palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#EFEEF6"))
+    palette.setColor(QPalette.ColorRole.Text, QColor(COLORS["text"]))
+    palette.setColor(QPalette.ColorRole.Button, QColor("#FFFFFF"))
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor(COLORS["text"]))
+    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#FFFFFF"))
+    palette.setColor(QPalette.ColorRole.ToolTipText, QColor(COLORS["text"]))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(COLORS["primary"]))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#FFFFFF"))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#A6A3B8"))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#A6A3B8"))
+    return palette
+
+
+def apply_palette(app: QApplication) -> None:
+    """Install the fixed light palette on the application."""
+    app.setPalette(build_palette())
+

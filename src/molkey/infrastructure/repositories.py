@@ -1,4 +1,4 @@
-"""SQLite repositories for MolVault domain records."""
+"""SQLite repositories for MolKey domain records."""
 
 import json
 import sqlite3
@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from molvault.domain.models import CaseRecord, PackageRecord
-from molvault.domain.states import PackageState
-from molvault.infrastructure.database import connect, transaction
+from molkey.domain.models import CaseRecord, PackageRecord
+from molkey.domain.states import PackageState
+from molkey.infrastructure.database import connect, transaction
 
 
 class RepositoryError(Exception):
