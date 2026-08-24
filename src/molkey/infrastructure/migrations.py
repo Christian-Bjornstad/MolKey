@@ -5,7 +5,7 @@ from pathlib import Path
 
 from molkey.infrastructure.writer_lock import get_registry_root_from_db, writer_lock
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 MIGRATION_001 = """
 -- Schema version table
@@ -126,6 +126,14 @@ CREATE TABLE IF NOT EXISTS patient_keys (
 CREATE INDEX IF NOT EXISTS idx_patient_keys_key ON patient_keys(pseudonymous_key);
 """
 
+MIGRATION_003 = """
+-- Operator attribution: initials of the person who generated each key.
+-- Legacy rows created before this column existed are backfilled as 'UKJENT'.
+ALTER TABLE patient_keys ADD COLUMN created_by TEXT NOT NULL DEFAULT 'UKJENT';
+
+CREATE INDEX IF NOT EXISTS idx_patient_keys_created_by ON patient_keys(created_by);
+"""
+
 
 def migrate(db_path: Path) -> None:
     """Apply schema migrations to the database.
@@ -154,6 +162,7 @@ def migrate(db_path: Path) -> None:
                     # Fresh database - apply all migrations.
                     conn.executescript(MIGRATION_001)
                     conn.executescript(MIGRATION_002)
+                    conn.executescript(MIGRATION_003)
                     conn.execute(
                         "INSERT INTO schema_version (version) VALUES (?)",
                         (SCHEMA_VERSION,),
@@ -175,6 +184,8 @@ def migrate(db_path: Path) -> None:
                         conn.executescript(MIGRATION_001)
                     if current_version < 2:
                         conn.executescript(MIGRATION_002)
+                    if current_version < 3:
+                        conn.executescript(MIGRATION_003)
                     if current_version < SCHEMA_VERSION:
                         conn.execute(
                             "UPDATE schema_version SET version = ?, applied_at = datetime('now')",

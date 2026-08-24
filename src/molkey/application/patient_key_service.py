@@ -26,14 +26,24 @@ class PatientKeyService:
     def __init__(self, db_path: Path) -> None:
         self.repository = PatientKeyRepository(db_path)
 
-    def get_or_create(self, patient_id: str) -> PatientKeyRecord:
+    @staticmethod
+    def _normalise_initials(initials: str) -> str:
+        normalised = initials.strip().upper()
+        if not normalised or not all(ch.isalpha() for ch in normalised):
+            raise ValueError("Operator initials are required (2-4 letters) before any key can be created")
+        if not 2 <= len(normalised) <= 4:
+            raise ValueError("Operator initials must be 2-4 letters")
+        return normalised
+
+    def get_or_create(self, patient_id: str, initials: str) -> PatientKeyRecord:
         normalised = patient_id.strip()
         if not normalised:
             raise ValueError("Patient ID is required")
         existing = self.repository.get_by_patient(normalised)
         if existing is not None:
             return existing
-        return self.repository.get_or_create(normalised, f"MK-{secrets.token_hex(5).upper()}")
+        operator = self._normalise_initials(initials)
+        return self.repository.get_or_create(normalised, f"MK-{secrets.token_hex(5).upper()}", operator)
 
     def lookup_by_patient(self, patient_id: str) -> PatientKeyRecord | None:
         normalised = patient_id.strip()
@@ -50,7 +60,8 @@ class PatientKeyService:
     def list_recent(self, limit: int = 50) -> list[PatientKeyRecord]:
         return self.repository.list_recent(limit)
 
-    def process_batch(self, patient_ids: list[str]) -> BatchResult:
+    def process_batch(self, patient_ids: list[str], initials: str) -> BatchResult:
+        operator = self._normalise_initials(initials)
         items: list[PatientKeyRecord] = []
         seen: set[str] = set()
         reused_count = 0
@@ -72,7 +83,7 @@ class PatientKeyService:
                 items.append(existing)
                 reused_count += 1
             else:
-                items.append(self.get_or_create(normalised))
+                items.append(self.get_or_create(normalised, operator))
                 created_count += 1
 
         return BatchResult(

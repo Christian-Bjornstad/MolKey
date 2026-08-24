@@ -80,6 +80,7 @@ def test_single_generate_reuses_permanent_key(qtbot, tmp_path):
 
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     dialog = window.findChild(QDialog, "generateKeyDialog")
+    dialog.findChild(QLineEdit, "dialogInitialsInput").setText("CFB")
     dialog.findChild(QLineEdit, "patientIdInput").setText("PAT-UI-001")
     qtbot.mouseClick(dialog.findChild(QPushButton, "confirmGenerateButton"), Qt.MouseButton.LeftButton)
 
@@ -97,6 +98,7 @@ def test_single_generate_reuses_permanent_key(qtbot, tmp_path):
 
 def test_batch_paste_generates_review_and_keys_only_export(qtbot, tmp_path, monkeypatch):
     window = connected_window(qtbot, tmp_path)
+    window.findChild(QLineEdit, "operatorInitialsInput").setText("CFB")
     qtbot.mouseClick(window.navigation_buttons[1], Qt.MouseButton.LeftButton)
     batch_input = window.findChild(QTextEdit, "batchPatientIdsInput")
     batch_input.setPlainText("PAT-001\nPAT-002\nPAT-001\n")
@@ -128,7 +130,7 @@ def test_batch_paste_generates_review_and_keys_only_export(qtbot, tmp_path, monk
 
 def test_lookup_works_in_both_directions(qtbot, tmp_path):
     window = connected_window(qtbot, tmp_path)
-    record = window.key_service.get_or_create("PAT-LOOKUP")
+    record = window.key_service.get_or_create("PAT-LOOKUP", initials="CFB")
     qtbot.mouseClick(window.navigation_buttons[2], Qt.MouseButton.LeftButton)
     lookup = window.findChild(QLineEdit, "lookupInput")
 
@@ -143,7 +145,7 @@ def test_lookup_works_in_both_directions(qtbot, tmp_path):
 
 def test_registry_page_lists_internal_mapping(qtbot, tmp_path):
     window = connected_window(qtbot, tmp_path)
-    record = window.key_service.get_or_create("PAT-INTERNAL")
+    record = window.key_service.get_or_create("PAT-INTERNAL", initials="CFB")
 
     qtbot.mouseClick(window.navigation_buttons[3], Qt.MouseButton.LeftButton)
 

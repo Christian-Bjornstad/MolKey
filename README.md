@@ -84,7 +84,15 @@ src/molkey/
 └── ui/               # PyQt6 main window, theme (#847CBA), fixed light palette
 ```
 
-- **Schema:** v2 (`patient_keys` table); migrations run automatically and additively.
+- **Schema:** v3 (`patient_keys` with operator attribution); migrations run
+  automatically and additively — existing shared databases upgrade in place and
+  legacy keys are attributed as `UKJENT` (unknown).
+- **Shared registry view:** the registry page lists **every** mapping from the
+  shared database — anyone's keys appear for everyone, searchable by patient ID,
+  key, or creator initials.
+- **Operator initials:** enter your initials (e.g. `CFB`) once on the Dashboard;
+  they're remembered per workstation and stamped onto every key you create.
+  Key generation is refused without them.
 - **Concurrency:** short `BEGIN IMMEDIATE` transactions, `busy_timeout=5000`,
   `portalocker` writer lock in a `locks/` directory — multiple workstations can
   generate keys simultaneously.
@@ -102,7 +110,7 @@ src/molkey/
 ## Development and testing
 
 ```bash
-uv run pytest -q        # 110 tests (unit + integration + Qt UI)
+uv run pytest -q        # 127 tests (unit + integration + Qt UI)
 uv run ruff check .     # lint
 uv run mypy src         # strict type check
 uv run python scripts/qualify_smb.py   # optional: SMB concurrency qualification

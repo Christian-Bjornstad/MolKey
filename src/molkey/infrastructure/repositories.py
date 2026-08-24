@@ -63,6 +63,7 @@ class PatientKeyRecord:
     patient_id: str
     pseudonymous_key: str
     created_at: datetime
+    created_by: str = "UKJENT"
 
 
 class PatientKeyRepository:
@@ -71,18 +72,21 @@ class PatientKeyRepository:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
 
-    def get_or_create(self, patient_id: str, pseudonymous_key: str) -> PatientKeyRecord:
+    def get_or_create(self, patient_id: str, pseudonymous_key: str, created_by: str) -> PatientKeyRecord:
         with transaction(self.db_path) as conn:
             conn.execute(
                 """
-                INSERT INTO patient_keys (patient_id, pseudonymous_key)
-                VALUES (?, ?)
+                INSERT INTO patient_keys (patient_id, pseudonymous_key, created_by)
+                VALUES (?, ?, ?)
                 ON CONFLICT(patient_id) DO NOTHING
                 """,
-                (patient_id, pseudonymous_key),
+                (patient_id, pseudonymous_key, created_by),
             )
             row = conn.execute(
-                "SELECT patient_id, pseudonymous_key, created_at FROM patient_keys WHERE patient_id = ?",
+                """
+                SELECT patient_id, pseudonymous_key, created_at, created_by
+                FROM patient_keys WHERE patient_id = ?
+                """,
                 (patient_id,),
             ).fetchone()
         if row is None:  # pragma: no cover - guarded by insert/select transaction
@@ -93,7 +97,10 @@ class PatientKeyRepository:
         conn = connect(self.db_path)
         try:
             row = conn.execute(
-                "SELECT patient_id, pseudonymous_key, created_at FROM patient_keys WHERE patient_id = ?",
+                """
+                SELECT patient_id, pseudonymous_key, created_at, created_by
+                FROM patient_keys WHERE patient_id = ?
+                """,
                 (patient_id,),
             ).fetchone()
         finally:
@@ -104,7 +111,10 @@ class PatientKeyRepository:
         conn = connect(self.db_path)
         try:
             row = conn.execute(
-                "SELECT patient_id, pseudonymous_key, created_at FROM patient_keys WHERE pseudonymous_key = ?",
+                """
+                SELECT patient_id, pseudonymous_key, created_at, created_by
+                FROM patient_keys WHERE pseudonymous_key = ?
+                """,
                 (pseudonymous_key,),
             ).fetchone()
         finally:
@@ -116,7 +126,7 @@ class PatientKeyRepository:
         try:
             rows = conn.execute(
                 """
-                SELECT patient_id, pseudonymous_key, created_at
+                SELECT patient_id, pseudonymous_key, created_at, created_by
                 FROM patient_keys ORDER BY created_at DESC, patient_id LIMIT ?
                 """,
                 (limit,),
@@ -452,6 +462,7 @@ def _patient_key_from_row(row: sqlite3.Row) -> PatientKeyRecord:
         patient_id=str(row["patient_id"]),
         pseudonymous_key=str(row["pseudonymous_key"]),
         created_at=datetime.fromisoformat(str(row["created_at"])),
+        created_by=str(row["created_by"]) if row["created_by"] else "UKJENT",
     )
 
 

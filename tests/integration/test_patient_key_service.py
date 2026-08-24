@@ -11,8 +11,8 @@ def test_generate_key_reuses_permanent_key_for_existing_patient(tmp_path: Path) 
     migrate(db_path)
     service = PatientKeyService(db_path)
 
-    first = service.get_or_create("12345678901")
-    second = service.get_or_create(" 12345678901 ")
+    first = service.get_or_create("12345678901", initials="CFB")
+    second = service.get_or_create(" 12345678901 ", initials="CFB")
 
     assert first.patient_id == "12345678901"
     assert first.pseudonymous_key.startswith("MK-")
@@ -27,9 +27,9 @@ def test_process_batch_reuses_keys_and_deduplicates_in_input_order(tmp_path: Pat
     db_path = tmp_path / "registry.db"
     migrate(db_path)
     service = PatientKeyService(db_path)
-    existing = service.get_or_create("PAT-001")
+    existing = service.get_or_create("PAT-001", initials="CFB")
 
-    result = service.process_batch(["PAT-001", " PAT-002 ", "PAT-001", "", "PAT-003"])
+    result = service.process_batch(["PAT-001", " PAT-002 ", "PAT-001", "", "PAT-003"], initials="CFB")
 
     assert [item.patient_id for item in result.items] == ["PAT-001", "PAT-002", "PAT-003"]
     assert result.items[0].pseudonymous_key == existing.pseudonymous_key
@@ -43,7 +43,7 @@ def test_export_contains_only_keys_in_batch_order(tmp_path: Path) -> None:
     db_path = tmp_path / "registry.db"
     migrate(db_path)
     service = PatientKeyService(db_path)
-    result = service.process_batch(["PATIENT-SECRET-A", "PATIENT-SECRET-B"])
+    result = service.process_batch(["PATIENT-SECRET-A", "PATIENT-SECRET-B"], initials="CFB")
     csv_path = tmp_path / "keys.csv"
     json_path = tmp_path / "keys.json"
 

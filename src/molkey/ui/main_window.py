@@ -47,13 +47,16 @@ class MainWindow(QMainWindow):
         database_path: Path | None = None,
     ) -> None:
         super().__init__()
-        self.settings = settings or QSettings()
+        # When settings is None, QSettings picks up the org/app names that
+        # __main__ sets on QApplication before constructing this window.
+        self.settings = settings if settings is not None else QSettings()
         saved_registry_path = str(self.settings.value("registry/root", ""))
         self.registry_path = saved_registry_path or registry_path
         self.registry_connected = registry_connected
         self.database_path = database_path
         self.key_service = PatientKeyService(database_path) if database_path is not None else None
         self.current_batch: BatchResult | None = None
+        self.operator_initials = str(self.settings.value("operator/initials", "")).strip().upper()
         self.page_metadata = [
             ("Dashboard", "Generate or retrieve a permanent patient key"),
             ("Batch generation", "Paste or import patient IDs and create keys in one batch"),
@@ -194,6 +197,21 @@ class MainWindow(QMainWindow):
         description.setWordWrap(True)
         card_layout.addWidget(description)
         card_layout.addSpacing(12)
+        card_layout.addWidget(QLabel("Your initials", objectName="fieldLabel"))
+        self.operator_initials_input = QLineEdit(objectName="operatorInitialsInput")
+        self.operator_initials_input.setAccessibleName("Operator initials")
+        self.operator_initials_input.setPlaceholderText("e.g. CFB")
+        self.operator_initials_input.setMaxLength(4)
+        self.operator_initials_input.setText(self.operator_initials)
+        self.operator_initials_input.textChanged.connect(self._remember_initials)
+        card_layout.addWidget(self.operator_initials_input)
+        initials_help = QLabel(
+            "Stored on this workstation and stamped onto every key you create, so colleagues can see who "
+            "generated each key in the registry.",
+            objectName="muted",
+        )
+        initials_help.setWordWrap(True)
+        card_layout.addWidget(initials_help)
         action = QPushButton("Generate or retrieve key", objectName="dashboardGenerateButton")
         action.setEnabled(self.key_service is not None and self.registry_connected)
         action.clicked.connect(self._open_generate_key_dialog)
@@ -227,6 +245,13 @@ class MainWindow(QMainWindow):
         dialog.setModal(True)
         dialog.show()
 
+    def _remember_initials(self, text: str) -> None:
+        self.operator_initials = text.strip().upper()
+        self.settings.setValue("operator/initials", self.operator_initials)
+        sender = self.sender()
+        if isinstance(sender, QLineEdit) and sender.text() != self.operator_initials:
+            sender.setText(self.operator_initials)
+
     def _open_generate_key_dialog(self) -> None:
         if self.key_service is None:
             return
@@ -234,10 +259,16 @@ class MainWindow(QMainWindow):
         dialog.setWindowTitle("Generate or retrieve key")
         dialog.setMinimumWidth(480)
         layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("Your initials", objectName="fieldLabel"))
+        initials_input = QLineEdit(objectName="dialogInitialsInput")
+        initials_input.setMaxLength(4)
+        initials_input.setPlaceholderText("e.g. CFB")
+        initials_input.setText(self.operator_initials)
+        layout.addWidget(initials_input)
         layout.addWidget(QLabel("Internal patient ID", objectName="fieldLabel"))
         patient_input = QLineEdit(objectName="patientIdInput")
         layout.addWidget(patient_input)
-        feedback = QLabel("", objectName="muted")
+        feedback = QLabel("", objectName="generateFeedback")
         layout.addWidget(feedback)
         layout.addWidget(QLabel("MolKey", objectName="fieldLabel"))
         output = QLineEdit(objectName="generatedKeyOutput")
@@ -256,12 +287,15 @@ class MainWindow(QMainWindow):
 
         def create() -> None:
             try:
-                record = self.key_service.get_or_create(patient_input.text())
+                record = self.key_service.get_or_create(patient_input.text(), initials_input.text())
             except ValueError as exc:
                 feedback.setText(str(exc))
                 return
+            self._remember_initials(initials_input.text())
             output.setText(record.pseudonymous_key)
-            feedback.setText("Permanent key ready. The mapping is stored in the secure registry.")
+            feedback.setText(
+                f"Permanent key ready — created by {record.created_by}. The mapping is stored in the shared registry."
+            )
             copy.setEnabled(True)
             self._refresh_registry()
 
@@ -323,8 +357,15 @@ class MainWindow(QMainWindow):
     def _process_batch(self) -> None:
         if self.key_service is None:
             return
+        if not self.operator_initials:
+            self.batch_summary.setText("Enter your initials on the Dashboard before generating keys.")
+            return
         patient_ids = self.batch_input.toPlainText().splitlines()
-        self.current_batch = self.key_service.process_batch(patient_ids)
+        try:
+            self.current_batch = self.key_service.process_batch(patient_ids, self.operator_initials)
+        except ValueError as exc:
+            self.batch_summary.setText(str(exc))
+            return
         self.batch_results.setRowCount(len(self.current_batch.items))
         for row, item in enumerate(self.current_batch.items):
             self.batch_results.setItem(row, 0, QTableWidgetItem(item.pseudonymous_key))
@@ -398,24 +439,56 @@ class MainWindow(QMainWindow):
         )
         warning.setWordWrap(True)
         card_layout.addWidget(warning)
-        self.registry_table = QTableWidget(0, 3, objectName="keyRegistryTable")
-        self.registry_table.setHorizontalHeaderLabels(["Patient ID", "MolKey", "Created"])
+        controls = QHBoxLayout()
+        self.registry_search_input = QLineEdit(objectName="registrySearchInput")
+        self.registry_search_input.setAccessibleName("Search the key registry")
+        self.registry_search_input.setPlaceholderText("Search patient ID, MolKey, or initials…")
+        self.registry_search_input.textChanged.connect(self._refresh_registry)
+        controls.addWidget(self.registry_search_input, 1)
+        refresh_button = QPushButton("Refresh", objectName="refreshRegistryButton")
+        refresh_button.setProperty("secondary", True)
+        refresh_button.clicked.connect(self._refresh_registry)
+        controls.addWidget(refresh_button)
+        card_layout.addLayout(controls)
+        self.registry_count_label = QLabel("", objectName="registryCountLabel")
+        card_layout.addWidget(self.registry_count_label)
+        self.registry_table = QTableWidget(0, 4, objectName="keyRegistryTable")
+        self.registry_table.setHorizontalHeaderLabels(["Patient ID", "MolKey", "Created", "By"])
         self.registry_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         card_layout.addWidget(self.registry_table)
         layout.addWidget(card)
         self._refresh_registry()
         return page
 
-    def _refresh_registry(self) -> None:
+    def _refresh_registry(self, *_args: object) -> None:
+        """Reload every mapping from the shared database and apply the search filter."""
         if not hasattr(self, "registry_table"):
             return
         records = self.key_service.list_recent(500) if self.key_service is not None else []
-        self.registry_table.setRowCount(len(records))
-        for row, record in enumerate(records):
+        query = self.registry_search_input.text().strip().upper() if hasattr(self, "registry_search_input") else ""
+        visible = [
+            record
+            for record in records
+            if not query
+            or query in record.patient_id.upper()
+            or query in record.pseudonymous_key
+            or query in record.created_by.upper()
+        ]
+        self.registry_table.setRowCount(len(visible))
+        for row, record in enumerate(visible):
             for column, value in enumerate(
-                (record.patient_id, record.pseudonymous_key, record.created_at.strftime("%Y-%m-%d %H:%M"))
+                (
+                    record.patient_id,
+                    record.pseudonymous_key,
+                    record.created_at.strftime("%Y-%m-%d %H:%M"),
+                    record.created_by,
+                )
             ):
                 self.registry_table.setItem(row, column, QTableWidgetItem(value))
+        summary = f"Showing {len(visible)} of {len(records)} keys"
+        if query:
+            summary += f' matching "{query}"'
+        self.registry_count_label.setText(summary)
 
     def _build_settings_page(self) -> QWidget:
         page = QWidget()
