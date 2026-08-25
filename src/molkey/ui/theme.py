@@ -81,7 +81,7 @@ QLabel#statusGood { color: #3A8F6B; font-weight: 700; }
 QLabel#statusError { color: #C04040; font-weight: 700; }
 QLabel#fieldLabel { color: #2D2950; font-weight: 700; }
 QLabel#settingsHelp { color: #5A5688; line-height: 1.4; }
-QLabel#statusPath { color: #7A76A3; font-family: "Cascadia Mono", "Consolas", monospace; }
+QLabel#statusPath, QLabel#detailKeyValue { color: #7A76A3; font-family: "Cascadia Mono", "Consolas", monospace; }
 QLineEdit {
     background: white; border: 1px solid #B8B4D8; border-radius: 7px;
     padding: 9px 12px; selection-background-color: #847CBA;

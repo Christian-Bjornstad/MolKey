@@ -6,8 +6,8 @@ import csv
 from collections.abc import Callable
 from pathlib import Path
 
-from PyQt6.QtCore import QSettings, Qt
-from PyQt6.QtGui import QFont, QGuiApplication, QIcon
+from PyQt6.QtCore import QSettings, Qt, QTimer
+from PyQt6.QtGui import QFont, QGuiApplication, QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QSpacerItem,
@@ -71,7 +72,18 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1100, 700)
         self.resize(1360, 840)
         self.setStyleSheet(STYLESHEET)
+        self._last_lookup_record: PatientKeyRecord | None = None
         self._build_ui()
+        self._install_copy_shortcuts()
+
+    def _install_copy_shortcuts(self) -> None:
+        """Ctrl+C copies the selected rows' keys from registry or batch tables."""
+        registry_copy = QShortcut(QKeySequence.StandardKey.Copy, self.registry_table)
+        registry_copy.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        registry_copy.activated.connect(self._copy_registry_keys)
+        batch_copy = QShortcut(QKeySequence.StandardKey.Copy, self.batch_results)
+        batch_copy.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        batch_copy.activated.connect(self._copy_batch_keys)
 
     def _set_brand_icon(self) -> None:
         """Apply the MolKey Helix Key icon from the repository assets folder."""
@@ -406,7 +418,29 @@ class MainWindow(QMainWindow):
         card_layout.addWidget(lookup_button)
         self.lookup_result = QLabel("", objectName="lookupResult")
         self.lookup_result.setWordWrap(True)
+        self.lookup_result.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         card_layout.addWidget(self.lookup_result)
+        lookup_copy_row = QHBoxLayout()
+        self.copy_lookup_key_button = QPushButton("Copy MolKey", objectName="copyLookupKeyButton")
+        self.copy_lookup_key_button.setProperty("secondary", True)
+        self.copy_lookup_key_button.setEnabled(False)
+        self.copy_lookup_patient_button = QPushButton("Copy patient ID", objectName="copyLookupPatientButton")
+        self.copy_lookup_patient_button.setProperty("secondary", True)
+        self.copy_lookup_patient_button.setEnabled(False)
+        lookup_copy_row.addWidget(self.copy_lookup_key_button)
+        lookup_copy_row.addWidget(self.copy_lookup_patient_button)
+        lookup_copy_row.addStretch()
+        card_layout.addLayout(lookup_copy_row)
+        self.copy_lookup_key_button.clicked.connect(
+            lambda: QGuiApplication.clipboard().setText(self._last_lookup_record.pseudonymous_key)
+            if self._last_lookup_record is not None
+            else None
+        )
+        self.copy_lookup_patient_button.clicked.connect(
+            lambda: QGuiApplication.clipboard().setText(self._last_lookup_record.patient_id)
+            if self._last_lookup_record is not None
+            else None
+        )
         card_layout.addStretch()
         layout.addWidget(card)
         return page
@@ -420,6 +454,10 @@ class MainWindow(QMainWindow):
             if value.upper().startswith("MK-")
             else self.key_service.lookup_by_patient(value)
         )
+        self._last_lookup_record = record
+        has_match = record is not None
+        self.copy_lookup_key_button.setEnabled(has_match)
+        self.copy_lookup_patient_button.setEnabled(has_match)
         self.lookup_result.setText(
             f"Patient ID: {record.patient_id}    MolKey: {record.pseudonymous_key}"
             if record is not None
@@ -455,6 +493,11 @@ class MainWindow(QMainWindow):
         self.registry_table = QTableWidget(0, 4, objectName="keyRegistryTable")
         self.registry_table.setHorizontalHeaderLabels(["Patient ID", "MolKey", "Created", "By"])
         self.registry_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.registry_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.registry_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.registry_table.doubleClicked.connect(self._open_registry_detail)
+        self.registry_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.registry_table.customContextMenuRequested.connect(self._show_registry_context_menu)
         card_layout.addWidget(self.registry_table)
         layout.addWidget(card)
         self._refresh_registry()
@@ -489,6 +532,102 @@ class MainWindow(QMainWindow):
         if query:
             summary += f' matching "{query}"'
         self.registry_count_label.setText(summary)
+
+    def _registry_record_for_row(self, row: int) -> PatientKeyRecord | None:
+        """Map a table row back to its PatientKeyRecord (rows mirror list order)."""
+        if self.key_service is None or not (0 <= row < self.registry_table.rowCount()):
+            return None
+        patient_id = self.registry_table.item(row, 0).text()
+        key = self.registry_table.item(row, 1).text()
+        return self.key_service.lookup_by_patient(patient_id) if key else None
+
+    def _open_registry_detail(self, index: object) -> None:
+        row = int(index.row()) if hasattr(index, "row") and not isinstance(index, int) else index
+        record = self._registry_record_for_row(int(row))
+        if record is None:
+            return
+        dialog = QDialog(self, objectName="registryDetailDialog")
+        dialog.setWindowTitle("Registry entry")
+        dialog.setMinimumWidth(460)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("MolKey", objectName="fieldLabel"))
+
+        key_row = QHBoxLayout()
+        key_value = QLabel(record.pseudonymous_key, objectName="detailKeyValue")
+        key_value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        key_row.addWidget(key_value, 1)
+        key_row.addWidget(self._make_copy_button(record.pseudonymous_key, "copyDetailKeyButton"))
+        layout.addLayout(key_row)
+
+        layout.addWidget(QLabel("Patient ID (DIT number)", objectName="fieldLabel"))
+        patient_row = QHBoxLayout()
+        patient_value = QLabel(record.patient_id, objectName="detailPatientValue")
+        patient_value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        patient_row.addWidget(patient_value, 1)
+        patient_row.addWidget(self._make_copy_button(record.patient_id, "copyDetailPatientButton"))
+        layout.addLayout(patient_row)
+
+        meta = QLabel(
+            f"Created {record.created_at.strftime('%Y-%m-%d %H:%M')}    By {record.created_by}",
+            objectName="settingsHelp",
+        )
+        layout.addWidget(meta)
+        close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(dialog.reject)
+        layout.addWidget(close)
+        dialog.setModal(True)
+        dialog.show()
+
+    def _make_copy_button(self, text: str, object_name: str) -> QPushButton:
+        button = QPushButton("Copy", objectName=object_name)
+        button.setProperty("secondary", True)
+
+        def copy_with_feedback() -> None:
+            QGuiApplication.clipboard().setText(text)
+            button.setText("Copied ✓")
+            QTimer.singleShot(1500, lambda: button.setText("Copy"))
+
+        button.clicked.connect(copy_with_feedback)
+        result: QPushButton = button
+        return result
+
+    def _selected_rows(self, table: QTableWidget) -> list[int]:
+        return sorted({index.row() for index in table.selectionModel().selectedIndexes()})
+
+    def _copy_registry_keys(self) -> None:
+        rows = self._selected_rows(self.registry_table)
+        keys = [self.registry_table.item(row, 1).text() for row in rows]
+        if keys:
+            QGuiApplication.clipboard().setText("\n".join(keys))
+
+    def _copy_registry_patients(self) -> None:
+        rows = self._selected_rows(self.registry_table)
+        patients = [self.registry_table.item(row, 0).text() for row in rows]
+        if patients:
+            QGuiApplication.clipboard().setText("\n".join(patients))
+
+    def _copy_selected_rows(self) -> None:
+        self._copy_registry_keys()
+
+    def _show_registry_context_menu(self, position: object) -> None:
+        menu = QMenu(self.registry_table)
+        menu.addAction("Copy MolKey", self._copy_registry_keys)
+        menu.addAction("Copy patient ID", self._copy_registry_patients)
+        menu.addAction(
+            "Copy entire row",
+            lambda: QGuiApplication.clipboard().setText("\t".join(
+                self.registry_table.item(row, column).text()
+                for row in self._selected_rows(self.registry_table)
+                for column in range(self.registry_table.columnCount())
+            )),
+        )
+        menu.exec(self.registry_table.viewport().mapToGlobal(position))
+
+    def _copy_batch_keys(self) -> None:
+        rows = self._selected_rows(self.batch_results)
+        keys = [self.batch_results.item(row, 0).text() for row in rows if self.batch_results.item(row, 0)]
+        if keys:
+            QGuiApplication.clipboard().setText("\n".join(keys))
 
     def _build_settings_page(self) -> QWidget:
         page = QWidget()

@@ -110,7 +110,7 @@ src/molkey/
 ## Development and testing
 
 ```bash
-uv run pytest -q        # 127 tests (unit + integration + Qt UI)
+uv run pytest -q        # 135 tests (unit + integration + Qt UI)
 uv run ruff check .     # lint
 uv run mypy src         # strict type check
 uv run python scripts/qualify_smb.py   # optional: SMB concurrency qualification
