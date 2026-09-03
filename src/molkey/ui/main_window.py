@@ -133,10 +133,6 @@ class MainWindow(QMainWindow):
         layout.addItem(QSpacerItem(1, 1, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         layout.addWidget(self._navigation_button("Settings", 4))
         layout.addSpacing(14)
-        badge = QLabel("SECURE WORKSPACE", objectName="environmentBadge")
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(badge)
-        layout.addSpacing(8)
         layout.addWidget(QLabel("MolKey 0.1.0", objectName="brandSubtitle"))
         return sidebar
 
@@ -188,15 +184,6 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(32, 28, 32, 28)
         layout.setSpacing(20)
-        notice = QFrame(objectName="privacyNotice")
-        notice_layout = QHBoxLayout(notice)
-        notice_layout.addWidget(QLabel("i", objectName="privacyIcon"))
-        self.privacy_notice = QLabel(
-            "Patient identifiers stay inside the registry. External exports contain generated MolKeys only.",
-            objectName="privacyText",
-        )
-        notice_layout.addWidget(self.privacy_notice, 1)
-        layout.addWidget(notice)
         card = QFrame(objectName="contentCard")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(28, 28, 28, 28)

@@ -65,19 +65,19 @@ def test_existing_patient_lookup_still_works_without_initials(tmp_path: Path) ->
     assert reader.lookup_by_key(created.pseudonymous_key) == created
 
 
-def test_schema_version_bumps_to_three(tmp_path: Path) -> None:
+def test_schema_version_bumps_to_current(tmp_path: Path) -> None:
     db_path = tmp_path / "registry.db"
 
     migrate(db_path)
 
-    assert SCHEMA_VERSION == 3
+    assert SCHEMA_VERSION == 4
     conn = sqlite3.connect(db_path)
     try:
         version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
         columns = {row[1] for row in conn.execute("PRAGMA table_info(patient_keys)").fetchall()}
     finally:
         conn.close()
-    assert version == 3
+    assert version == 4
     assert "created_by" in columns
 
 

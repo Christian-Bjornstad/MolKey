@@ -23,6 +23,41 @@ def test_generate_key_reuses_permanent_key_for_existing_patient(tmp_path: Path) 
     assert service.list_recent() == [first]
 
 
+def test_patient_id_is_stored_upper_case_and_case_insensitive_at_lookup(tmp_path: Path) -> None:
+    """DIT numbers typed as 26oum12345 / 26OUM12345 map to one stored row."""
+    db_path = tmp_path / "registry.db"
+    migrate(db_path)
+    service = PatientKeyService(db_path)
+
+    lower = service.get_or_create("26oum12345", initials="cfb")
+    upper = service.get_or_create("26OUM12345", initials="CFB")
+    mixed = service.get_or_create(" 26Oum12345 ", initials="CFB")
+
+    assert lower == upper == mixed  # same stored record across spellings
+    assert lower.patient_id == "26OUM12345"
+    assert lower.created_by == "CFB"
+    assert service.lookup_by_patient("26oum12345") == lower
+    assert service.lookup_by_patient("26Oum12345") == lower
+
+    row = PatientKeyService(db_path).repository.get_by_patient("26oum12345")
+    assert row is not None and row.patient_id == "26OUM12345"
+
+
+def test_batch_generation_deduplicates_across_case_spellings(tmp_path: Path) -> None:
+    db_path = tmp_path / "registry.db"
+    migrate(db_path)
+    service = PatientKeyService(db_path)
+
+    result = service.process_batch(
+        ["26oum12345", "26OUM12345", "26Oum12345", "26oum99999"], initials="CFB"
+    )
+
+    assert [item.patient_id for item in result.items] == ["26OUM12345", "26OUM99999"]
+    assert result.created_count == 2
+    assert result.duplicate_count == 2
+    assert result.invalid_count == 0
+
+
 def test_process_batch_reuses_keys_and_deduplicates_in_input_order(tmp_path: Path) -> None:
     db_path = tmp_path / "registry.db"
     migrate(db_path)

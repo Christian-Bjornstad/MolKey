@@ -36,7 +36,7 @@ class PatientKeyService:
         return normalised
 
     def get_or_create(self, patient_id: str, initials: str) -> PatientKeyRecord:
-        normalised = patient_id.strip()
+        normalised = patient_id.strip().upper()
         if not normalised:
             raise ValueError("Patient ID is required")
         existing = self.repository.get_by_patient(normalised)
@@ -46,7 +46,7 @@ class PatientKeyService:
         return self.repository.get_or_create(normalised, f"MK-{secrets.token_hex(5).upper()}", operator)
 
     def lookup_by_patient(self, patient_id: str) -> PatientKeyRecord | None:
-        normalised = patient_id.strip()
+        normalised = patient_id.strip().upper()
         if not normalised:
             return None
         return self.repository.get_by_patient(normalised)
@@ -70,7 +70,7 @@ class PatientKeyService:
         invalid_count = 0
 
         for patient_id in patient_ids:
-            normalised = patient_id.strip()
+            normalised = patient_id.strip().upper()
             if not normalised:
                 invalid_count += 1
                 continue

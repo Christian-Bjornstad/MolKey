@@ -11,6 +11,17 @@ from molkey.domain.states import PackageState
 from molkey.infrastructure.database import connect, transaction
 
 
+def normalise_external_id(value: str) -> str:
+    """Normalise an externally-typed identifier (DIT number, patient key) for storage.
+
+    DIT numbers and other hospital-style identifiers are routinely typed in
+    mixed case (e.g. ``26oum12345`` vs. ``26OUM12345``). We persist a single
+    canonical upper-case form so the database never contains duplicates that
+    differ only by case, and every lookup is case-insensitive.
+    """
+    return value.strip().upper()
+
+
 class RepositoryError(Exception):
     """Base error for repository operations."""
 
@@ -73,6 +84,7 @@ class PatientKeyRepository:
         self.db_path = db_path
 
     def get_or_create(self, patient_id: str, pseudonymous_key: str, created_by: str) -> PatientKeyRecord:
+        normalised_id = normalise_external_id(patient_id)
         with transaction(self.db_path) as conn:
             conn.execute(
                 """
@@ -80,17 +92,17 @@ class PatientKeyRepository:
                 VALUES (?, ?, ?)
                 ON CONFLICT(patient_id) DO NOTHING
                 """,
-                (patient_id, pseudonymous_key, created_by),
+                (normalised_id, pseudonymous_key, created_by),
             )
             row = conn.execute(
                 """
                 SELECT patient_id, pseudonymous_key, created_at, created_by
                 FROM patient_keys WHERE patient_id = ?
                 """,
-                (patient_id,),
+                (normalised_id,),
             ).fetchone()
         if row is None:  # pragma: no cover - guarded by insert/select transaction
-            raise RepositoryError(f"Patient key was not saved: {patient_id}")
+            raise RepositoryError(f"Patient key was not saved: {normalised_id}")
         return _patient_key_from_row(row)
 
     def get_by_patient(self, patient_id: str) -> PatientKeyRecord | None:
@@ -101,7 +113,7 @@ class PatientKeyRepository:
                 SELECT patient_id, pseudonymous_key, created_at, created_by
                 FROM patient_keys WHERE patient_id = ?
                 """,
-                (patient_id,),
+                (normalise_external_id(patient_id),),
             ).fetchone()
         finally:
             conn.close()
@@ -115,7 +127,7 @@ class PatientKeyRepository:
                 SELECT patient_id, pseudonymous_key, created_at, created_by
                 FROM patient_keys WHERE pseudonymous_key = ?
                 """,
-                (pseudonymous_key,),
+                (normalise_external_id(pseudonymous_key),),
             ).fetchone()
         finally:
             conn.close()
@@ -152,8 +164,8 @@ class CaseRepository:
                     """,
                     (
                         record.case_id,
-                        record.patient_id,
-                        record.specimen_id.removeprefix("SPEC-"),
+                        normalise_external_id(record.patient_id),
+                        normalise_external_id(record.specimen_id.removeprefix("SPEC-")),
                         record.created_at.isoformat(),
                     ),
                 )
@@ -168,6 +180,20 @@ class CaseRepository:
             row = conn.execute(
                 "SELECT id, patient_id, case_number, created_at FROM cases WHERE id = ?",
                 (case_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if row is None:
+            return None
+        return _case_from_row(row)
+
+    def get_by_case_number(self, case_number: str) -> CaseRecord | None:
+        """Look up a case by its DIT case number, case-insensitively."""
+        conn = connect(self.db_path)
+        try:
+            row = conn.execute(
+                "SELECT id, patient_id, case_number, created_at FROM cases WHERE case_number = ?",
+                (normalise_external_id(case_number),),
             ).fetchone()
         finally:
             conn.close()

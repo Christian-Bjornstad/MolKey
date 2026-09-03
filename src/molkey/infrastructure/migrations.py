@@ -5,7 +5,7 @@ from pathlib import Path
 
 from molkey.infrastructure.writer_lock import get_registry_root_from_db, writer_lock
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 MIGRATION_001 = """
 -- Schema version table
@@ -134,6 +134,16 @@ ALTER TABLE patient_keys ADD COLUMN created_by TEXT NOT NULL DEFAULT 'UKJENT';
 CREATE INDEX IF NOT EXISTS idx_patient_keys_created_by ON patient_keys(created_by);
 """
 
+MIGRATION_004 = """
+-- Case-insensitive identifiers: external IDs (DIT numbers, patient keys) are
+-- always stored in upper case so '26oum12345' and '26OUM12345' resolve to the
+-- same row. Existing rows are uppercased in place; this is a one-way
+-- normalisation that only affects ASCII letters and never changes digits.
+UPDATE cases SET case_number = UPPER(case_number) WHERE case_number GLOB '*[a-z]*';
+UPDATE cases SET patient_id  = UPPER(patient_id)  WHERE patient_id  GLOB '*[a-z]*';
+UPDATE patient_keys SET patient_id = UPPER(patient_id) WHERE patient_id GLOB '*[a-z]*';
+"""
+
 
 def migrate(db_path: Path) -> None:
     """Apply schema migrations to the database.
@@ -151,7 +161,7 @@ def migrate(db_path: Path) -> None:
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA journal_mode = DELETE")
             conn.execute("PRAGMA synchronous = FULL")
-            conn.execute("PRAGMA busy_timeout = 5000")
+            conn.execute("PRAGMA busy_timeout = 30000")
             conn.execute("PRAGMA temp_store = MEMORY")
 
             # Check current schema version in an explicit transaction
@@ -163,6 +173,7 @@ def migrate(db_path: Path) -> None:
                     conn.executescript(MIGRATION_001)
                     conn.executescript(MIGRATION_002)
                     conn.executescript(MIGRATION_003)
+                    conn.executescript(MIGRATION_004)
                     conn.execute(
                         "INSERT INTO schema_version (version) VALUES (?)",
                         (SCHEMA_VERSION,),
@@ -186,6 +197,8 @@ def migrate(db_path: Path) -> None:
                         conn.executescript(MIGRATION_002)
                     if current_version < 3:
                         conn.executescript(MIGRATION_003)
+                    if current_version < 4:
+                        conn.executescript(MIGRATION_004)
                     if current_version < SCHEMA_VERSION:
                         conn.execute(
                             "UPDATE schema_version SET version = ?, applied_at = datetime('now')",
