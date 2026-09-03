@@ -52,7 +52,7 @@ class TestDatabaseSettings:
                 conn.close()
 
     def test_connection_has_bounded_busy_timeout(self):
-        """Busy timeout is set to 5000ms."""
+        """Busy timeout is set to 30000ms so readers survive slow SMB commits."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "registry.db"
             migrate(db_path)
@@ -60,7 +60,7 @@ class TestDatabaseSettings:
             try:
                 cursor = conn.execute("PRAGMA busy_timeout")
                 row = cursor.fetchone()
-                assert row[0] == 5000
+                assert row[0] == 30000
             finally:
                 conn.close()
 

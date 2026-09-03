@@ -33,7 +33,7 @@ def connect(
         - foreign_keys=ON
         - journal_mode=DELETE (not WAL, for SMB safety)
         - synchronous=FULL
-        - busy_timeout=5000ms
+        - busy_timeout=30000ms (readers survive slow SMB commits)
         - temp_store=MEMORY
         - Row factory for dict-like access
 
@@ -54,7 +54,7 @@ def connect(
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = DELETE")
     conn.execute("PRAGMA synchronous = 3")  # FULL = 3
-    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA busy_timeout = 30000")
     conn.execute("PRAGMA temp_store = MEMORY")
     conn.row_factory = sqlite3.Row
 
@@ -101,6 +101,12 @@ def transaction(
                         raise DatabaseError(f"Database busy after {attempts} attempts: {exc}") from exc
                     time.sleep(0.05 * (2 ** (attempt - 1)))
 
+            # BEGIN IMMEDIATE only needs the RESERVED lock, which coexists with
+            # readers; the collision point is COMMIT, which needs EXCLUSIVE and
+            # blocks while any reader holds SHARED. Let COMMIT wait out readers
+            # instead of failing instantly.
+            conn.execute("PRAGMA busy_timeout = 30000")
+
             try:
                 yield conn
             except sqlite3.Error as exc:
@@ -113,6 +119,10 @@ def transaction(
                 raise
             else:
                 conn.commit()
+                # Keep query-planner statistics current without blocking readers
+                # (cheap no-op until the tables grow; a periodic ANALYZE fires on close thresholds)
+                with suppress(sqlite3.Error):
+                    conn.execute("PRAGMA optimize")
         finally:
             conn.close()
 

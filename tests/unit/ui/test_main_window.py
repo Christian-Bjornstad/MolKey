@@ -52,13 +52,21 @@ def test_help_describes_key_registry_workflow(qtbot):
     assert "encrypt" not in help_text.lower()
 
 
-def test_dashboard_exposes_connection_and_privacy_status(qtbot):
+def test_dashboard_exposes_connection_status(qtbot):
     window = MainWindow(registry_path=r"\\secure-drive\molkey", registry_connected=True)
     qtbot.addWidget(window)
 
     assert window.connection_status.text() == "Registry connected"
     assert "secure-drive" in window.registry_path_label.text()
-    assert "Patient identifiers stay inside the registry" in window.privacy_notice.text()
+    # The dashboard carries no decorative privacy banner — only functional text.
+    assert not hasattr(window, "privacy_notice")
+
+
+def test_sidebar_has_no_workspace_badge(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.findChild(QLabel, "environmentBadge") is None
 
 
 def test_sidebar_navigation_switches_to_batch_page(qtbot):
