@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/molkey_icon_256.png" alt="MolKey Helix Key icon" width="128" />
+  <img src="assets/molkey_icon_256.png" alt="MolKey brand icon" width="128" />
   <h1 align="center">MolKey</h1>
   <p align="center"><em>Permanent patient pseudonym keys for molecular pathology</em></p>
 </p>
@@ -84,24 +84,25 @@ src/molkey/
 └── ui/               # PyQt6 main window, theme (#847CBA), fixed light palette
 ```
 
-- **Schema:** v3 (`patient_keys` with operator attribution); migrations run
-  automatically and additively — existing shared databases upgrade in place and
-  legacy keys are attributed as `UKJENT` (unknown).
+- **Schema:** v4; migrations run automatically and additively — existing
+  shared databases upgrade in place, legacy keys are attributed as `UKJENT`
+  (unknown). Patient IDs and DIT case numbers are stored in **upper case**
+  and looked up case-insensitively (`26oum12345` = `26OUM12345`).
 - **Shared registry view:** the registry page lists **every** mapping from the
   shared database — anyone's keys appear for everyone, searchable by patient ID,
   key, or creator initials.
 - **Operator initials:** enter your initials (e.g. `CFB`) once on the Dashboard;
   they're remembered per workstation and stamped onto every key you create.
   Key generation is refused without them.
-- **Concurrency:** short `BEGIN IMMEDIATE` transactions, `busy_timeout=5000`,
+- **Concurrency:** short `BEGIN IMMEDIATE` transactions, `busy_timeout=30000`,
   `portalocker` writer lock in a `locks/` directory — multiple workstations can
-  generate keys simultaneously.
+  generate keys simultaneously; commits wait out active readers.
 - **Theming:** explicit dialog/messagebox/tooltip styles plus an application-wide
   fixed light palette so Windows dark mode can never produce unreadable popups.
-- **Icon:** the "Helix Key" brand mark — a double helix forming the key shaft.
-  Masters: `assets/molkey_icon.svg` (full detail) and `assets/molkey_icon_small.svg`
-  (simplified 64/32/16 px variant). Regenerate the PNG set and `molkey_icon.ico`
-  with:
+- **Icon:** the brand mark from the **Designer master**
+  (`assets/molkey_icon_designer.png` — navy squircle tile: key + database +
+  molecular network, rounded corners, transparent). Regenerate the PNG set
+  and `molkey_icon.ico` with:
 
   ```bash
   uv run python scripts/render_icons.py
@@ -110,7 +111,7 @@ src/molkey/
 ## Development and testing
 
 ```bash
-uv run pytest -q        # 135 tests (unit + integration + Qt UI)
+uv run pytest -q        # 142 tests (unit + integration + Qt UI)
 uv run ruff check .     # lint
 uv run mypy src         # strict type check
 uv run python scripts/qualify_smb.py   # optional: SMB concurrency qualification
