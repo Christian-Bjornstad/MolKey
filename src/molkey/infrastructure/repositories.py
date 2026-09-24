@@ -85,6 +85,8 @@ class PatientKeyRepository:
 
     def get_or_create(self, patient_id: str, pseudonymous_key: str, created_by: str) -> PatientKeyRecord:
         normalised_id = normalise_external_id(patient_id)
+        if not patient_id.strip().isascii() or not patient_id.strip().isalnum():
+            raise ValueError("Patient ID must contain only letters A-Z and digits 0-9")
         with transaction(self.db_path) as conn:
             conn.execute(
                 """
@@ -92,7 +94,7 @@ class PatientKeyRepository:
                 VALUES (?, ?, ?)
                 ON CONFLICT(patient_id) DO NOTHING
                 """,
-                (normalised_id, pseudonymous_key, created_by),
+                (normalised_id, normalise_external_id(pseudonymous_key), normalise_external_id(created_by)),
             )
             row = conn.execute(
                 """
@@ -142,6 +144,47 @@ class PatientKeyRepository:
                 FROM patient_keys ORDER BY created_at DESC, patient_id LIMIT ?
                 """,
                 (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [_patient_key_from_row(row) for row in rows]
+
+    def search_registry(self, query: str = "", limit: int = 500) -> tuple[list[PatientKeyRecord], int, int]:
+        """Search the entire registry; return visible rows, match count and total count."""
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        term = normalise_external_id(query)
+        # Treat %, _ and backslash as literal search text.
+        pattern = "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        condition = (
+            (
+                "WHERE patient_id LIKE ? ESCAPE '\\' OR pseudonymous_key LIKE ? ESCAPE '\\' "
+                "OR created_by LIKE ? ESCAPE '\\'"
+            )
+            if term
+            else ""
+        )
+        args: tuple[str, ...] = (pattern, pattern, pattern) if term else ()
+        conn = connect(self.db_path)
+        try:
+            conn.execute("BEGIN")
+            total = int(conn.execute("SELECT COUNT(*) FROM patient_keys").fetchone()[0])
+            matched = int(conn.execute(f"SELECT COUNT(*) FROM patient_keys {condition}", args).fetchone()[0])
+            rows = conn.execute(
+                "SELECT patient_id, pseudonymous_key, created_at, created_by "
+                f"FROM patient_keys {condition} ORDER BY created_at DESC, patient_id LIMIT ?",
+                (*args, limit),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [_patient_key_from_row(row) for row in rows], matched, total
+
+    def list_all(self) -> list[PatientKeyRecord]:
+        """Read every mapping for the protected Excel snapshot."""
+        conn = connect(self.db_path)
+        try:
+            rows = conn.execute(
+                "SELECT patient_id, pseudonymous_key, created_at, created_by FROM patient_keys ORDER BY patient_id"
             ).fetchall()
         finally:
             conn.close()

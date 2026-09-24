@@ -1,6 +1,7 @@
 """Registry browser shows everyone's keys with operator attribution, searchable; creation requires initials."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QPushButton
@@ -116,7 +117,7 @@ def test_initials_are_normalised_stored_and_remembered(qtbot, tmp_path: Path) ->
     window.findChild(type(window.generate_key_button), "confirmGenerateButton").click()
     output = window.findChild(type(window.lookup_input), "generatedKeyOutput")
 
-    assert output.text().startswith("MK-")
+    assert output.text().startswith("MK")
     assert initials_input.text() == "CFB"
     assert str(window.settings.value("operator/initials")) == "CFB"
 
@@ -134,7 +135,7 @@ def test_initials_are_normalised_stored_and_remembered(qtbot, tmp_path: Path) ->
 def test_batch_generation_blocked_with_message_when_initials_missing(qtbot, tmp_path: Path) -> None:
     window = _build_window(qtbot, tmp_path)
     window.findChild(type(window.lookup_input), "operatorInitialsInput").setText("")
-    window.batch_input.setPlainText("PAT-001\nPAT-002")
+    window.batch_input.setPlainText("PAT001\nPAT002")
 
     batch_button = window.findChild(QPushButton, "processBatchButton")
     assert batch_button is not None
@@ -142,3 +143,18 @@ def test_batch_generation_blocked_with_message_when_initials_missing(qtbot, tmp_
 
     assert "initials" in window.batch_summary.text().lower()
     assert PatientKeyService(window.database_path).list_recent() == []
+
+
+def test_excel_lock_warning_is_visible_and_can_be_cleared(qtbot, tmp_path: Path) -> None:
+    window = _build_window(qtbot, tmp_path)
+    window.operator_initials_input.setText("CFB")
+    window.batch_input.setPlainText("26OUM12345")
+    with patch("molkey.infrastructure.registry_workbook.os.replace", side_effect=PermissionError("file in use")):
+        window._process_batch()
+
+    assert "Excel is not updated" in window.excel_status_label.text()
+    assert "Close" in window.batch_summary.text()
+    assert window.key_service.lookup_by_patient("26oum12345") is not None
+
+    window._refresh_registry_workbook()
+    assert "Excel register ready" in window.excel_status_label.text()

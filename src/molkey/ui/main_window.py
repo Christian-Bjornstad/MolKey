@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import csv
+import sqlite3
+import time
 from collections.abc import Callable
 from pathlib import Path
 
-from PyQt6.QtCore import QSettings, Qt, QTimer
-from PyQt6.QtGui import QFont, QGuiApplication, QIcon, QKeySequence, QShortcut
+from PyQt6.QtCore import QSettings, Qt, QTimer, QUrl
+from PyQt6.QtGui import QDesktopServices, QFont, QGuiApplication, QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -31,9 +33,22 @@ from PyQt6.QtWidgets import (
 
 from molkey.application.patient_key_service import BatchResult, PatientKeyService
 from molkey.config import ConfigError, RegistryConfig, _is_mapped_drive
+from molkey.infrastructure.database import DatabaseError
 from molkey.infrastructure.migrations import migrate
 from molkey.infrastructure.repositories import PatientKeyRecord
+from molkey.infrastructure.writer_lock import RegistryBusyError
 from molkey.ui.theme import STYLESHEET
+
+
+def _copy_text(text: str) -> None:
+    """Retry briefly when Windows has temporarily locked the clipboard."""
+    clipboard = QGuiApplication.clipboard()
+    for attempt in range(5):
+        clipboard.setText(text)
+        if clipboard.text() == text:
+            return
+        if attempt < 4:
+            time.sleep(0.05)
 
 
 class MainWindow(QMainWindow):
@@ -75,6 +90,9 @@ class MainWindow(QMainWindow):
         self._last_lookup_record: PatientKeyRecord | None = None
         self._build_ui()
         self._install_copy_shortcuts()
+        if self.key_service is not None:
+            self.key_service.refresh_registry_workbook()
+            self._update_excel_status()
 
     def _install_copy_shortcuts(self) -> None:
         """Ctrl+C copies the selected rows' keys from registry or batch tables."""
@@ -133,7 +151,7 @@ class MainWindow(QMainWindow):
         layout.addItem(QSpacerItem(1, 1, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         layout.addWidget(self._navigation_button("Settings", 4))
         layout.addSpacing(14)
-        layout.addWidget(QLabel("MolKey 0.1.0", objectName="brandSubtitle"))
+        layout.addWidget(QLabel("MolKey 0.2.0", objectName="brandSubtitle"))
         return sidebar
 
     def _navigation_button(self, label: str, index: int) -> QPushButton:
@@ -155,6 +173,7 @@ class MainWindow(QMainWindow):
                 button.setProperty("active", item_index == index)
                 button.style().unpolish(button)
                 button.style().polish(button)
+
         return navigate
 
     def _build_topbar(self) -> QFrame:
@@ -266,6 +285,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(initials_input)
         layout.addWidget(QLabel("Internal patient ID", objectName="fieldLabel"))
         patient_input = QLineEdit(objectName="patientIdInput")
+        patient_input.setPlaceholderText("Letters and digits only, e.g. 26OUM12345")
         layout.addWidget(patient_input)
         feedback = QLabel("", objectName="generateFeedback")
         layout.addWidget(feedback)
@@ -287,7 +307,7 @@ class MainWindow(QMainWindow):
         def create() -> None:
             try:
                 record = self.key_service.get_or_create(patient_input.text(), initials_input.text())
-            except ValueError as exc:
+            except (ValueError, OSError, sqlite3.Error, DatabaseError, RegistryBusyError) as exc:
                 feedback.setText(str(exc))
                 return
             self._remember_initials(initials_input.text())
@@ -297,9 +317,11 @@ class MainWindow(QMainWindow):
             )
             copy.setEnabled(True)
             self._refresh_registry()
+            self._show_workbook_status(feedback)
 
         generate.clicked.connect(create)
-        copy.clicked.connect(lambda: QGuiApplication.clipboard().setText(output.text()))
+        patient_input.returnPressed.connect(create)
+        copy.clicked.connect(lambda: _copy_text(output.text()))
         dialog.setModal(True)
         dialog.show()
 
@@ -312,13 +334,14 @@ class MainWindow(QMainWindow):
         card_layout.addWidget(QLabel("Batch key generation", objectName="sectionTitle"))
         guidance = QLabel(
             "Paste one patient ID per line, or import the first column of a CSV. Existing patients keep their "
-            "permanent key. Exports contain only MolKeys in the reviewed order.",
+            "permanent key. IDs may contain letters and digits only. "
+            "Exports contain only MolKeys in the reviewed order.",
             objectName="settingsHelp",
         )
         guidance.setWordWrap(True)
         card_layout.addWidget(guidance)
         self.batch_input = QTextEdit(objectName="batchPatientIdsInput")
-        self.batch_input.setPlaceholderText("PAT-001\nPAT-002\nPAT-003")
+        self.batch_input.setPlaceholderText("26OUM00001\n26OUM00002\n26OUM00003")
         card_layout.addWidget(self.batch_input)
         action_row = QHBoxLayout()
         import_button = QPushButton("Import CSV", objectName="importBatchButton")
@@ -362,7 +385,7 @@ class MainWindow(QMainWindow):
         patient_ids = self.batch_input.toPlainText().splitlines()
         try:
             self.current_batch = self.key_service.process_batch(patient_ids, self.operator_initials)
-        except ValueError as exc:
+        except (ValueError, OSError, sqlite3.Error, DatabaseError, RegistryBusyError) as exc:
             self.batch_summary.setText(str(exc))
             return
         self.batch_results.setRowCount(len(self.current_batch.items))
@@ -375,6 +398,30 @@ class MainWindow(QMainWindow):
         )
         self.findChild(QPushButton, "exportBatchButton").setEnabled(bool(self.current_batch.items))
         self._refresh_registry()
+        self._show_workbook_status(self.batch_summary)
+
+    def _show_workbook_status(self, label: QLabel) -> None:
+        if self.key_service is not None and self.key_service.workbook_error:
+            label.setText(
+                label.text()
+                + " · Key saved in database, but Excel is not updated. Close Excel and click Refresh Excel."
+            )
+        self._update_excel_status()
+
+    def _update_excel_status(self) -> None:
+        if self.key_service is None:
+            self.excel_status_label.setText("")
+        elif self.key_service.workbook_error:
+            self.excel_status_label.setText(
+                "Excel is not updated. Close the workbook and click Refresh Excel. "
+                f"Details: {self.key_service.workbook_error}"
+            )
+            self.excel_status_label.setObjectName("statusError")
+        else:
+            self.excel_status_label.setText(f"Excel register ready: {self.key_service.workbook_path}")
+            self.excel_status_label.setObjectName("statusGood")
+        self.excel_status_label.style().unpolish(self.excel_status_label)
+        self.excel_status_label.style().polish(self.excel_status_label)
 
     def _export_batch(self) -> None:
         if self.key_service is None or self.current_batch is None:
@@ -402,6 +449,7 @@ class MainWindow(QMainWindow):
         card_layout.addWidget(self.lookup_input)
         lookup_button = QPushButton("Lookup", objectName="lookupButton")
         lookup_button.clicked.connect(self._lookup)
+        self.lookup_input.returnPressed.connect(self._lookup)
         card_layout.addWidget(lookup_button)
         self.lookup_result = QLabel("", objectName="lookupResult")
         self.lookup_result.setWordWrap(True)
@@ -419,14 +467,18 @@ class MainWindow(QMainWindow):
         lookup_copy_row.addStretch()
         card_layout.addLayout(lookup_copy_row)
         self.copy_lookup_key_button.clicked.connect(
-            lambda: QGuiApplication.clipboard().setText(self._last_lookup_record.pseudonymous_key)
-            if self._last_lookup_record is not None
-            else None
+            lambda: (
+                _copy_text(self._last_lookup_record.pseudonymous_key)
+                if self._last_lookup_record is not None
+                else None
+            )
         )
         self.copy_lookup_patient_button.clicked.connect(
-            lambda: QGuiApplication.clipboard().setText(self._last_lookup_record.patient_id)
-            if self._last_lookup_record is not None
-            else None
+            lambda: (
+                _copy_text(self._last_lookup_record.patient_id)
+                if self._last_lookup_record is not None
+                else None
+            )
         )
         card_layout.addStretch()
         layout.addWidget(card)
@@ -436,11 +488,7 @@ class MainWindow(QMainWindow):
         if self.key_service is None:
             return
         value = self.lookup_input.text().strip()
-        record = (
-            self.key_service.lookup_by_key(value)
-            if value.upper().startswith("MK-")
-            else self.key_service.lookup_by_patient(value)
-        )
+        record = self.key_service.lookup_by_patient(value) or self.key_service.lookup_by_key(value)
         self._last_lookup_record = record
         has_match = record is not None
         self.copy_lookup_key_button.setEnabled(has_match)
@@ -474,7 +522,22 @@ class MainWindow(QMainWindow):
         refresh_button.setProperty("secondary", True)
         refresh_button.clicked.connect(self._refresh_registry)
         controls.addWidget(refresh_button)
+        copy_keys_button = QPushButton("Copy selected MolKeys", objectName="copyRegistryKeysButton")
+        copy_keys_button.setProperty("secondary", True)
+        copy_keys_button.clicked.connect(self._copy_registry_keys)
+        controls.addWidget(copy_keys_button)
+        excel_button = QPushButton("Open Excel register", objectName="openExcelRegistryButton")
+        excel_button.setProperty("secondary", True)
+        excel_button.clicked.connect(self._open_registry_workbook)
+        controls.addWidget(excel_button)
+        refresh_excel_button = QPushButton("Refresh Excel", objectName="refreshExcelRegistryButton")
+        refresh_excel_button.setProperty("secondary", True)
+        refresh_excel_button.clicked.connect(self._refresh_registry_workbook)
+        controls.addWidget(refresh_excel_button)
         card_layout.addLayout(controls)
+        self.excel_status_label = QLabel("", objectName="excelRegistryStatus")
+        self.excel_status_label.setWordWrap(True)
+        card_layout.addWidget(self.excel_status_label)
         self.registry_count_label = QLabel("", objectName="registryCountLabel")
         card_layout.addWidget(self.registry_count_label)
         self.registry_table = QTableWidget(0, 4, objectName="keyRegistryTable")
@@ -494,16 +557,15 @@ class MainWindow(QMainWindow):
         """Reload every mapping from the shared database and apply the search filter."""
         if not hasattr(self, "registry_table"):
             return
-        records = self.key_service.list_recent(500) if self.key_service is not None else []
-        query = self.registry_search_input.text().strip().upper() if hasattr(self, "registry_search_input") else ""
-        visible = [
-            record
-            for record in records
-            if not query
-            or query in record.patient_id.upper()
-            or query in record.pseudonymous_key
-            or query in record.created_by.upper()
-        ]
+        query = self.registry_search_input.text().strip() if hasattr(self, "registry_search_input") else ""
+        try:
+            visible, matched, total = (
+                self.key_service.search_registry(query) if self.key_service is not None else ([], 0, 0)
+            )
+        except (OSError, sqlite3.Error, DatabaseError) as exc:
+            self.registry_table.setRowCount(0)
+            self.registry_count_label.setText(f"Registry unavailable: {exc}")
+            return
         self.registry_table.setRowCount(len(visible))
         for row, record in enumerate(visible):
             for column, value in enumerate(
@@ -515,10 +577,29 @@ class MainWindow(QMainWindow):
                 )
             ):
                 self.registry_table.setItem(row, column, QTableWidgetItem(value))
-        summary = f"Showing {len(visible)} of {len(records)} keys"
+        summary = f"Showing {len(visible)} of {total} keys ({matched} match)"
         if query:
-            summary += f' matching "{query}"'
+            summary += f' for "{query}"'
         self.registry_count_label.setText(summary)
+
+    def _refresh_registry_workbook(self) -> None:
+        if self.key_service is None:
+            self.registry_count_label.setText("Connect a registry first.")
+            return
+        if self.key_service.refresh_registry_workbook():
+            self.registry_count_label.setText(f"Excel register updated: {self.key_service.workbook_path}")
+        else:
+            self.registry_count_label.setText(f"Excel register could not update: {self.key_service.workbook_error}")
+        self._update_excel_status()
+
+    def _open_registry_workbook(self) -> None:
+        if self.key_service is None:
+            self.registry_count_label.setText("Connect a registry first.")
+            return
+        if self.key_service.workbook_error or not self.key_service.workbook_path.exists():
+            self._refresh_registry_workbook()
+        if self.key_service.workbook_error is None and self.key_service.workbook_path.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.key_service.workbook_path)))
 
     def _registry_record_for_row(self, row: int) -> PatientKeyRecord | None:
         """Map a table row back to its PatientKeyRecord (rows mirror list order)."""
@@ -570,7 +651,7 @@ class MainWindow(QMainWindow):
         button.setProperty("secondary", True)
 
         def copy_with_feedback() -> None:
-            QGuiApplication.clipboard().setText(text)
+            _copy_text(text)
             button.setText("Copied ✓")
             QTimer.singleShot(1500, lambda: button.setText("Copy"))
 
@@ -585,13 +666,26 @@ class MainWindow(QMainWindow):
         rows = self._selected_rows(self.registry_table)
         keys = [self.registry_table.item(row, 1).text() for row in rows]
         if keys:
-            QGuiApplication.clipboard().setText("\n".join(keys))
+            _copy_text("\n".join(keys))
 
     def _copy_registry_patients(self) -> None:
         rows = self._selected_rows(self.registry_table)
         patients = [self.registry_table.item(row, 0).text() for row in rows]
         if patients:
-            QGuiApplication.clipboard().setText("\n".join(patients))
+            _copy_text("\n".join(patients))
+
+    def _copy_registry_rows(self) -> None:
+        rows = self._selected_rows(self.registry_table)
+        if rows:
+            _copy_text(
+                "\n".join(
+                    "\t".join(
+                        self.registry_table.item(row, column).text()
+                        for column in range(self.registry_table.columnCount())
+                    )
+                    for row in rows
+                )
+            )
 
     def _copy_selected_rows(self) -> None:
         self._copy_registry_keys()
@@ -600,21 +694,14 @@ class MainWindow(QMainWindow):
         menu = QMenu(self.registry_table)
         menu.addAction("Copy MolKey", self._copy_registry_keys)
         menu.addAction("Copy patient ID", self._copy_registry_patients)
-        menu.addAction(
-            "Copy entire row",
-            lambda: QGuiApplication.clipboard().setText("\t".join(
-                self.registry_table.item(row, column).text()
-                for row in self._selected_rows(self.registry_table)
-                for column in range(self.registry_table.columnCount())
-            )),
-        )
+        menu.addAction("Copy entire row", self._copy_registry_rows)
         menu.exec(self.registry_table.viewport().mapToGlobal(position))
 
     def _copy_batch_keys(self) -> None:
         rows = self._selected_rows(self.batch_results)
         keys = [self.batch_results.item(row, 0).text() for row in rows if self.batch_results.item(row, 0)]
         if keys:
-            QGuiApplication.clipboard().setText("\n".join(keys))
+            _copy_text("\n".join(keys))
 
     def _build_settings_page(self) -> QWidget:
         page = QWidget()
@@ -671,10 +758,6 @@ class MainWindow(QMainWindow):
         if not (registry_path.startswith((r"\\", "//")) or _is_mapped_drive(registry_path)):
             self._set_settings_feedback("Enter an approved UNC network path or mapped network drive.", error=True)
             return
-        self.settings.setValue("registry/root", registry_path)
-        self.settings.sync()
-        self.registry_path = registry_path
-        self.registry_path_label.setText(registry_path)
         try:
             config = RegistryConfig.from_root(registry_path)
             config.locks_dir.mkdir(parents=True, exist_ok=True)
@@ -682,11 +765,17 @@ class MainWindow(QMainWindow):
             config.staging_dir.mkdir(parents=True, exist_ok=True)
             config.backups_dir.mkdir(parents=True, exist_ok=True)
             migrate(config.database_path)
-        except (ConfigError, OSError, RuntimeError) as exc:
-            self._set_settings_feedback(f"Folder saved, but MolKey could not connect: {exc}", error=True)
+        except (ConfigError, OSError, RuntimeError, sqlite3.Error) as exc:
+            self._set_settings_feedback(f"MolKey could not connect: {exc}", error=True)
             return
+        self.settings.setValue("registry/root", registry_path)
+        self.settings.sync()
+        self.registry_path = registry_path
+        self.registry_path_label.setText(registry_path)
         self.database_path = config.database_path
         self.key_service = PatientKeyService(config.database_path)
+        self.key_service.refresh_registry_workbook()
+        self._update_excel_status()
         self.registry_connected = True
         self.connection_status.setText("Registry connected")
         self.connection_status.setObjectName("statusGood")
@@ -695,6 +784,7 @@ class MainWindow(QMainWindow):
         self.generate_key_button.setEnabled(True)
         self.findChild(QPushButton, "dashboardGenerateButton").setEnabled(True)
         self._set_settings_feedback("Registry connected and ready.", error=False)
+        self._refresh_registry()
 
     def _set_settings_feedback(self, text: str, *, error: bool) -> None:
         self.settings_feedback.setText(text)

@@ -50,7 +50,7 @@ def test_batch_generation_also_requires_initials(tmp_path: Path) -> None:
     service = PatientKeyService(db_path)
 
     with pytest.raises(ValueError, match="initials"):
-        service.process_batch(["PAT-001", "PAT-002"], initials="")
+        service.process_batch(["PAT001", "PAT002"], initials="")
 
 
 def test_existing_patient_lookup_still_works_without_initials(tmp_path: Path) -> None:

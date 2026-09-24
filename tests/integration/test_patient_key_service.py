@@ -1,5 +1,6 @@
 import csv
 import json
+import re
 from pathlib import Path
 
 from molkey.application.patient_key_service import PatientKeyService
@@ -15,7 +16,9 @@ def test_generate_key_reuses_permanent_key_for_existing_patient(tmp_path: Path) 
     second = service.get_or_create(" 12345678901 ", initials="CFB")
 
     assert first.patient_id == "12345678901"
-    assert first.pseudonymous_key.startswith("MK-")
+    assert first.pseudonymous_key.startswith("MK")
+    assert first.pseudonymous_key.isalnum()
+    assert re.fullmatch(r"MK[0-9A-F]{16}", first.pseudonymous_key)
     assert "12345678901" not in first.pseudonymous_key
     assert second == first
     assert service.lookup_by_patient("12345678901") == first
@@ -62,11 +65,11 @@ def test_process_batch_reuses_keys_and_deduplicates_in_input_order(tmp_path: Pat
     db_path = tmp_path / "registry.db"
     migrate(db_path)
     service = PatientKeyService(db_path)
-    existing = service.get_or_create("PAT-001", initials="CFB")
+    existing = service.get_or_create("PAT001", initials="CFB")
 
-    result = service.process_batch(["PAT-001", " PAT-002 ", "PAT-001", "", "PAT-003"], initials="CFB")
+    result = service.process_batch(["PAT001", " PAT002 ", "PAT001", "", "PAT003"], initials="CFB")
 
-    assert [item.patient_id for item in result.items] == ["PAT-001", "PAT-002", "PAT-003"]
+    assert [item.patient_id for item in result.items] == ["PAT001", "PAT002", "PAT003"]
     assert result.items[0].pseudonymous_key == existing.pseudonymous_key
     assert result.reused_count == 1
     assert result.created_count == 2
@@ -78,7 +81,7 @@ def test_export_contains_only_keys_in_batch_order(tmp_path: Path) -> None:
     db_path = tmp_path / "registry.db"
     migrate(db_path)
     service = PatientKeyService(db_path)
-    result = service.process_batch(["PATIENT-SECRET-A", "PATIENT-SECRET-B"], initials="CFB")
+    result = service.process_batch(["PATIENTSECRETA", "PATIENTSECRETB"], initials="CFB")
     csv_path = tmp_path / "keys.csv"
     json_path = tmp_path / "keys.json"
 
@@ -91,5 +94,23 @@ def test_export_contains_only_keys_in_batch_order(tmp_path: Path) -> None:
     expected = [{"molkey": item.pseudonymous_key} for item in result.items]
     assert csv_rows == expected
     assert json_rows == expected
-    assert "PATIENT-SECRET" not in csv_path.read_text(encoding="utf-8")
-    assert "PATIENT-SECRET" not in json_path.read_text(encoding="utf-8")
+    assert "PATIENTSECRET" not in csv_path.read_text(encoding="utf-8")
+    assert "PATIENTSECRET" not in json_path.read_text(encoding="utf-8")
+
+
+def test_new_patient_ids_reject_special_characters(tmp_path: Path) -> None:
+    db_path = tmp_path / "registry.db"
+    migrate(db_path)
+    service = PatientKeyService(db_path)
+
+    for invalid in ("PAT-001", "PAT_001", "PAT 001", "PAT/001", "PÁT001"):
+        try:
+            service.get_or_create(invalid, initials="CFB")
+        except ValueError as exc:
+            assert "letters A-Z and digits 0-9" in str(exc)
+        else:
+            raise AssertionError(f"Accepted invalid patient ID: {invalid}")
+
+    result = service.process_batch(["PAT-001", "pat_002", "pat003"], initials="CFB")
+    assert result.invalid_count == 2
+    assert [item.patient_id for item in result.items] == ["PAT003"]

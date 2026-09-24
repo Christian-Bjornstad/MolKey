@@ -89,17 +89,17 @@ def test_single_generate_reuses_permanent_key(qtbot, tmp_path):
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     dialog = window.findChild(QDialog, "generateKeyDialog")
     dialog.findChild(QLineEdit, "dialogInitialsInput").setText("CFB")
-    dialog.findChild(QLineEdit, "patientIdInput").setText("PAT-UI-001")
+    dialog.findChild(QLineEdit, "patientIdInput").setText("PATUI001")
     qtbot.mouseClick(dialog.findChild(QPushButton, "confirmGenerateButton"), Qt.MouseButton.LeftButton)
 
     generated = dialog.findChild(QLineEdit, "generatedKeyOutput").text()
-    assert generated.startswith("MK-")
-    assert window.key_service.lookup_by_patient("PAT-UI-001").pseudonymous_key == generated
+    assert generated.startswith("MK")
+    assert window.key_service.lookup_by_patient("PATUI001").pseudonymous_key == generated
 
     dialog.close()
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     second = window.findChild(QDialog, "generateKeyDialog")
-    second.findChild(QLineEdit, "patientIdInput").setText("PAT-UI-001")
+    second.findChild(QLineEdit, "patientIdInput").setText("PATUI001")
     qtbot.mouseClick(second.findChild(QPushButton, "confirmGenerateButton"), Qt.MouseButton.LeftButton)
     assert second.findChild(QLineEdit, "generatedKeyOutput").text() == generated
 
@@ -109,7 +109,7 @@ def test_batch_paste_generates_review_and_keys_only_export(qtbot, tmp_path, monk
     window.findChild(QLineEdit, "operatorInitialsInput").setText("CFB")
     qtbot.mouseClick(window.navigation_buttons[1], Qt.MouseButton.LeftButton)
     batch_input = window.findChild(QTextEdit, "batchPatientIdsInput")
-    batch_input.setPlainText("PAT-001\nPAT-002\nPAT-001\n")
+    batch_input.setPlainText("PAT001\nPAT002\nPAT001\n")
 
     qtbot.mouseClick(
         window.findChild(QPushButton, "processBatchButton"), Qt.MouseButton.LeftButton
@@ -133,33 +133,33 @@ def test_batch_paste_generates_review_and_keys_only_export(qtbot, tmp_path, monk
     with destination.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     assert list(rows[0]) == ["molkey"]
-    assert "PAT-001" not in destination.read_text(encoding="utf-8")
+    assert "PAT001" not in destination.read_text(encoding="utf-8")
 
 
 def test_lookup_works_in_both_directions(qtbot, tmp_path):
     window = connected_window(qtbot, tmp_path)
-    record = window.key_service.get_or_create("PAT-LOOKUP", initials="CFB")
+    record = window.key_service.get_or_create("PATLOOKUP", initials="CFB")
     qtbot.mouseClick(window.navigation_buttons[2], Qt.MouseButton.LeftButton)
     lookup = window.findChild(QLineEdit, "lookupInput")
 
-    lookup.setText("PAT-LOOKUP")
+    lookup.setText("PATLOOKUP")
     qtbot.mouseClick(window.findChild(QPushButton, "lookupButton"), Qt.MouseButton.LeftButton)
     assert record.pseudonymous_key in window.findChild(QLabel, "lookupResult").text()
 
     lookup.setText(record.pseudonymous_key.lower())
     qtbot.mouseClick(window.findChild(QPushButton, "lookupButton"), Qt.MouseButton.LeftButton)
-    assert "PAT-LOOKUP" in window.findChild(QLabel, "lookupResult").text()
+    assert "PATLOOKUP" in window.findChild(QLabel, "lookupResult").text()
 
 
 def test_registry_page_lists_internal_mapping(qtbot, tmp_path):
     window = connected_window(qtbot, tmp_path)
-    record = window.key_service.get_or_create("PAT-INTERNAL", initials="CFB")
+    record = window.key_service.get_or_create("PATINTERNAL", initials="CFB")
 
     qtbot.mouseClick(window.navigation_buttons[3], Qt.MouseButton.LeftButton)
 
     table = window.findChild(QTableWidget, "keyRegistryTable")
     visible = " ".join(table.item(0, column).text() for column in range(table.columnCount()))
-    assert "PAT-INTERNAL" in visible
+    assert "PATINTERNAL" in visible
     assert record.pseudonymous_key in visible
 
 

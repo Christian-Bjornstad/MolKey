@@ -18,9 +18,9 @@
 ## What MolKey does
 
 MolKey generates and manages **permanent pseudonymous patient keys** (format
-`MK-YYYY-XXXXXXXX`). Each internal patient ID receives exactly one random,
-non-identifying key — forever. The mapping between patient IDs and keys lives only
-inside a shared SQLite registry on the hospital's access-controlled secure drive.
+`MK` followed by 16 uppercase hexadecimal characters). Each internal patient ID
+receives exactly one random, non-identifying key — forever. SQLite is the source
+of truth; the protected Excel copy sits beside it on the hospital's secure drive.
 
 | Capability | Detail |
 |---|---|
@@ -28,13 +28,14 @@ inside a shared SQLite registry on the hospital's access-controlled secure drive
 | Batch generation | Paste one ID per line or import a CSV; duplicates are deduplicated, input order preserved |
 | Keys-only export | CSV/JSON containing generated keys **only** — never patient IDs |
 | Bidirectional lookup | Patient ID → key, or key → patient ID (internal use) |
+| Excel register | Protected, searchable `MolKey-register.xlsx` beside `registry.db`, refreshed after new keys |
 | Shared registry | SQLite over SMB: rollback journal, `synchronous=FULL`, bounded retries, writer lock |
 | Safe root validation | UNC paths and *active* mapped drives only; plain local paths rejected |
 | Automatic bootstrap | Folders, database, and migrations are created at first start |
 
-**Privacy model:** patient identifiers never leave the registry. External systems
-(sequencing vendors, upload portals) receive generated keys only; MolKey is the
-single place where the two are connected.
+**Privacy model:** patient identifiers remain on the protected registry share,
+including its Excel copy. External systems (sequencing vendors, upload portals)
+receive generated keys only. Never send `MolKey-register.xlsx` externally.
 
 ## Quick start
 
@@ -48,6 +49,21 @@ uv run molkey                 # start the desktop app
 2. MolKey creates `registry.db` and its support folders automatically.
 3. Generate single keys from the dashboard, paste a batch under
    **Batch generation**, review, then export keys-only CSV/JSON.
+
+### Looking up a sample in Excel
+
+Open `MolKey-register.xlsx` directly from the approved registry folder. The
+`Register` sheet contains patient ID, MolKey, creation time, and creator initials;
+use Excel's filter or Find to locate a sample. It is a **lookup copy**
+of the database, not an input form; edits in Excel never change the database.
+New keys written through MolKey refresh it
+automatically; close and reopen the workbook to see changes made while it was
+already open. If Excel has locked the file and an update cannot replace it,
+MolKey retains the committed key and shows a warning. Close the workbook and use
+**Refresh Excel** on the Key registry page. **Open Excel register** opens the copy
+from the app. The workbook inherits the shared folder's access controls and
+contains sensitive patient IDs, so keep it on the approved share and include it
+in the share's backup and access review.
 
 Optional environment override:
 
@@ -88,9 +104,13 @@ src/molkey/
   shared databases upgrade in place, legacy keys are attributed as `UKJENT`
   (unknown). Patient IDs and DIT case numbers are stored in **upper case**
   and looked up case-insensitively (`26oum12345` = `26OUM12345`).
-- **Shared registry view:** the registry page lists **every** mapping from the
-  shared database — anyone's keys appear for everyone, searchable by patient ID,
-  key, or creator initials.
+- **Identifiers:** new patient IDs contain only letters A–Z and digits 0–9;
+  mixed case input is stored uppercase. New MolKeys also contain only letters
+  and digits. Input with punctuation or spaces inside an ID is rejected rather
+  than silently altered.
+- **Shared registry view:** search scans **every** mapping in the shared database,
+  including records beyond the first 500; the table shows the first 500 matches
+  and displays the full match count. Search by patient ID, key, or creator initials.
 - **Operator initials:** enter your initials (e.g. `CFB`) once on the Dashboard;
   they're remembered per workstation and stamped onto every key you create.
   Key generation is refused without them.
@@ -111,7 +131,7 @@ src/molkey/
 ## Development and testing
 
 ```bash
-uv run pytest -q        # 142 tests (unit + integration + Qt UI)
+uv run pytest -q        # unit + integration + Qt UI tests
 uv run ruff check .     # lint
 uv run mypy src         # strict type check
 uv run python scripts/qualify_smb.py   # optional: SMB concurrency qualification
