@@ -9,7 +9,7 @@ from pathlib import Path
 
 from molkey.infrastructure.database import DatabaseError
 from molkey.infrastructure.registry_workbook import WORKBOOK_NAME, write_registry_workbook
-from molkey.infrastructure.repositories import PatientKeyRecord, PatientKeyRepository
+from molkey.infrastructure.repositories import KeyCollisionError, PatientKeyRecord, PatientKeyRepository
 from molkey.infrastructure.writer_lock import RegistryBusyError, writer_lock
 
 
@@ -26,6 +26,8 @@ class BatchResult:
 
 class PatientKeyService:
     """Generate and retrieve stable pseudonymous patient keys."""
+
+    MAX_KEY_ATTEMPTS = 20
 
     def __init__(self, db_path: Path) -> None:
         self.repository = PatientKeyRepository(db_path)
@@ -64,9 +66,18 @@ class PatientKeyService:
         if existing is not None:
             return existing
         operator = self._normalise_initials(initials)
-        record = self.repository.get_or_create(normalised, f"MK{secrets.token_hex(8).upper()}", operator)
+        record = self._create_unique_key(normalised, operator)
         self.refresh_registry_workbook()
         return record
+
+    def _create_unique_key(self, patient_id: str, operator: str) -> PatientKeyRecord:
+        for _ in range(self.MAX_KEY_ATTEMPTS):
+            candidate = f"MK{secrets.randbelow(10_000_000):07d}"
+            try:
+                return self.repository.get_or_create(patient_id, candidate, operator)
+            except KeyCollisionError:
+                continue
+        raise ValueError("Could not assign a unique MolKey; please try again")
 
     def lookup_by_patient(self, patient_id: str) -> PatientKeyRecord | None:
         normalised = patient_id.strip().upper()
@@ -111,7 +122,7 @@ class PatientKeyService:
                 reused_count += 1
             else:
                 try:
-                    record = self.repository.get_or_create(normalised, f"MK{secrets.token_hex(8).upper()}", operator)
+                    record = self._create_unique_key(normalised, operator)
                 except Exception:
                     if created_count:
                         self.refresh_registry_workbook()

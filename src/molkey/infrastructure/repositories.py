@@ -30,6 +30,10 @@ class DuplicateRecordError(RepositoryError):
     """Raised when a record violates a uniqueness constraint."""
 
 
+class KeyCollisionError(DuplicateRecordError):
+    """A generated MolKey already belongs to another patient."""
+
+
 class RecordNotFoundError(RepositoryError):
     """Raised when a required record does not exist."""
 
@@ -92,7 +96,7 @@ class PatientKeyRepository:
                 """
                 INSERT INTO patient_keys (patient_id, pseudonymous_key, created_by)
                 VALUES (?, ?, ?)
-                ON CONFLICT(patient_id) DO NOTHING
+                ON CONFLICT DO NOTHING
                 """,
                 (normalised_id, normalise_external_id(pseudonymous_key), normalise_external_id(created_by)),
             )
@@ -103,8 +107,8 @@ class PatientKeyRepository:
                 """,
                 (normalised_id,),
             ).fetchone()
-        if row is None:  # pragma: no cover - guarded by insert/select transaction
-            raise RepositoryError(f"Patient key was not saved: {normalised_id}")
+        if row is None:
+            raise KeyCollisionError("Generated MolKey is already assigned")
         return _patient_key_from_row(row)
 
     def get_by_patient(self, patient_id: str) -> PatientKeyRecord | None:

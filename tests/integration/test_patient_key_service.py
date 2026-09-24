@@ -2,6 +2,7 @@ import csv
 import json
 import re
 from pathlib import Path
+from unittest.mock import patch
 
 from molkey.application.patient_key_service import PatientKeyService
 from molkey.infrastructure.migrations import migrate
@@ -18,7 +19,7 @@ def test_generate_key_reuses_permanent_key_for_existing_patient(tmp_path: Path) 
     assert first.patient_id == "12345678901"
     assert first.pseudonymous_key.startswith("MK")
     assert first.pseudonymous_key.isalnum()
-    assert re.fullmatch(r"MK[0-9A-F]{16}", first.pseudonymous_key)
+    assert re.fullmatch(r"MK[0-9]{7}", first.pseudonymous_key)
     assert "12345678901" not in first.pseudonymous_key
     assert second == first
     assert service.lookup_by_patient("12345678901") == first
@@ -114,3 +115,17 @@ def test_new_patient_ids_reject_special_characters(tmp_path: Path) -> None:
     result = service.process_batch(["PAT-001", "pat_002", "pat003"], initials="CFB")
     assert result.invalid_count == 2
     assert [item.patient_id for item in result.items] == ["PAT003"]
+
+
+def test_short_numeric_key_collision_is_retried_without_changing_existing_key(tmp_path: Path) -> None:
+    db_path = tmp_path / "registry.db"
+    migrate(db_path)
+    service = PatientKeyService(db_path)
+    with patch("molkey.application.patient_key_service.secrets.randbelow", side_effect=[1234567, 1234567, 7654321]):
+        first = service.get_or_create("26OUM12345", initials="CFB")
+        second = service.get_or_create("26OUM12346", initials="CFB")
+
+    assert first.pseudonymous_key == "MK1234567"
+    assert second.pseudonymous_key == "MK7654321"
+    assert service.lookup_by_patient("26OUM12345") == first
+    assert service.lookup_by_patient("26OUM12346") == second

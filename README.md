@@ -18,7 +18,7 @@
 ## What MolKey does
 
 MolKey generates and manages **permanent pseudonymous patient keys** (format
-`MK` followed by 16 uppercase hexadecimal characters). Each internal patient ID
+`MK` followed by seven random digits, for example `MK1234567`). Each internal patient ID
 receives exactly one random, non-identifying key — forever. SQLite is the source
 of truth; the protected Excel copy sits beside it on the hospital's secure drive.
 
