@@ -119,10 +119,9 @@ src/molkey/
   generate keys simultaneously; commits wait out active readers.
 - **Theming:** explicit dialog/messagebox/tooltip styles plus an application-wide
   fixed light palette so Windows dark mode can never produce unreadable popups.
-- **Icon:** the brand mark from the **Designer master**
-  (`assets/molkey_icon_designer.png` — navy squircle tile: key + database +
-  molecular network, rounded corners, transparent). Regenerate the PNG set
-  and `molkey_icon.ico` with:
+- **Icon:** a navy key with a turquoise DNA double helix. The editable source is
+  `assets/molkey_icon.svg`; regenerate the transparent PNG sizes and Windows
+  `molkey_icon.ico` with:
 
   ```bash
   uv run python scripts/render_icons.py

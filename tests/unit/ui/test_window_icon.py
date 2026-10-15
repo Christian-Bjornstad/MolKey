@@ -1,4 +1,4 @@
-"""The MolKey window must carry the Designer brand icon."""
+"""The MolKey window must carry the SVG-derived brand icon."""
 
 from pathlib import Path
 
@@ -18,13 +18,14 @@ def test_main_window_sets_molkey_brand_icon(qtbot) -> None:
 
 def test_brand_icon_asset_exists_in_repo() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    assert (repo_root / "assets" / "molkey_icon_designer.png").is_file()
+    assert (repo_root / "assets" / "molkey_icon.svg").is_file()
     assert (repo_root / "assets" / "molkey_icon_256.png").is_file()
     assert (repo_root / "assets" / "molkey_icon.ico").is_file()
+    assert not QImage(str(repo_root / "assets" / "molkey_icon.ico")).isNull()
 
 
 def test_brand_icon_corners_are_transparent() -> None:
-    """The Designer master ships white corners; the rendered set must not."""
+    """Rounded tile corners must remain transparent in the rendered PNG."""
     repo_root = Path(__file__).resolve().parents[3]
     image = QImage(str(repo_root / "assets" / "molkey_icon_256.png"))
     assert image.format() in (

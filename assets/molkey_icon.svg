@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">MolKey</title>
+  <desc id="description">A white key with a turquoise DNA double helix in its circular bow.</desc>
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="#102A43"/>
+  <circle cx="91" cy="119" r="52" fill="none" stroke="#F3FAFC" stroke-width="18"/>
+  <path d="M145 119H217" fill="none" stroke="#F3FAFC" stroke-width="18" stroke-linecap="round"/>
+  <path d="M181 121V150M207 121V143" fill="none" stroke="#F3FAFC" stroke-width="17" stroke-linecap="round"/>
+  <g fill="none" stroke="#27D3C3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M77 87C77 98 105 99 105 110C105 121 77 121 77 132C77 143 105 144 105 155" stroke-width="6"/>
+    <path d="M105 87C105 98 77 99 77 110C77 121 105 121 105 132C105 143 77 144 77 155" stroke-width="6"/>
+    <path d="M78 90H104M78 110H104M78 132H104M78 152H104" stroke-width="4"/>
+  </g>
+</svg>

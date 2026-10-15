@@ -104,7 +104,7 @@ class MainWindow(QMainWindow):
         batch_copy.activated.connect(self._copy_batch_keys)
 
     def _set_brand_icon(self) -> None:
-        """Apply the MolKey brand icon (Designer master) from repo assets."""
+        """Apply the MolKey brand icon from the generated repo assets."""
         asset = Path(__file__).resolve().parents[3] / "assets" / "molkey_icon_256.png"
         if asset.is_file():
             self.setWindowIcon(QIcon(str(asset)))
