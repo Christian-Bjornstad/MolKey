@@ -77,11 +77,13 @@ Add a pinned component (pin the commit you actually release from):
 ### 3.3 Icon asset
 
 Add `src/emolpat/ui/resources/molkey.png` (the other modules use PNG;
-LVMS uses SVG). The finalized brand mark is the **Helix Key** design; render
-sources live in MolKey at `assets/molkey_icon.svg` (master) and
-`assets/molkey_icon_small.svg` (simplified 64/32/16 px variant). Pre-rendered
-`molkey_icon_256.png` and a multi-resolution `molkey_icon.ico` are already in
-`assets/` — copy the 256 px PNG for the portal card.
+LVMS uses SVG). The finalized brand mark is the **Designer master** (navy
+squircle tile: key + database + molecular network) with transparent
+rounded corners; the source of truth is
+`assets/molkey_icon_designer.png`, and the render pipeline
+`scripts/render_icons.py` regenerates the full PNG set (512/256/64/32/16,
+transparent corners) plus the multi-resolution `molkey_icon.ico`. Copy the
+256 px PNG for the portal card.
 
 ### 3.4 Release requirements
 

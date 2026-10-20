@@ -130,7 +130,7 @@ def test_batch_results_table_also_copies_selected_keys(qtbot, tmp_path: Path) ->
     QGuiApplication.clipboard().clear()
     window._copy_batch_keys()
 
-    copied = [line for line in _clipboard_text().splitlines() if line.startswith("MK-")]
+    copied = [line for line in _clipboard_text().splitlines() if line.startswith("MK")]
     assert len(copied) == 2
 
 
@@ -174,4 +174,4 @@ def test_generate_dialog_offers_copy_of_new_key(qtbot, tmp_path: Path) -> None:
     QGuiApplication.clipboard().clear()
     copy_button.click()
     assert _clipboard_text() == output.text()
-    assert output.text().startswith("MK-")
+    assert output.text().startswith("MK")

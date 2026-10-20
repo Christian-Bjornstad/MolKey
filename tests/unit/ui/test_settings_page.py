@@ -23,7 +23,7 @@ def test_settings_page_contains_registry_path_controls(qtbot, tmp_path: Path) ->
     assert window.page_title.text() == "Settings"
 
 
-def test_save_registry_path_persists_valid_unc(qtbot, tmp_path: Path) -> None:
+def test_inaccessible_unc_does_not_replace_working_settings(qtbot, tmp_path: Path) -> None:
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
     window = MainWindow(settings=settings)
     qtbot.addWidget(window)
@@ -32,11 +32,11 @@ def test_save_registry_path_persists_valid_unc(qtbot, tmp_path: Path) -> None:
 
     qtbot.mouseClick(window.findChild(QPushButton, "saveRegistryButton"), Qt.MouseButton.LeftButton)
 
-    assert settings.value("registry/root") == unc
-    assert window.settings_feedback.text().startswith("Folder saved, but MolKey could not connect:")
+    assert settings.value("registry/root") is None
+    assert window.settings_feedback.text().startswith("MolKey could not connect:")
     assert window.settings_feedback.objectName() == "statusError"
     assert not window.generate_key_button.isEnabled()
-    assert window.registry_path_label.text() == unc
+    assert window.registry_path_label.text() != unc
 
 
 def test_save_registry_path_rejects_local_path(qtbot, tmp_path: Path) -> None:

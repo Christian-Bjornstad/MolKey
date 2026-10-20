@@ -1,8 +1,8 @@
-"""The MolKey window must carry the Helix Key brand icon."""
+"""The MolKey window must carry the SVG-derived brand icon."""
 
 from pathlib import Path
 
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QImage
 
 
 def test_main_window_sets_molkey_brand_icon(qtbot) -> None:
@@ -21,6 +21,21 @@ def test_brand_icon_asset_exists_in_repo() -> None:
     assert (repo_root / "assets" / "molkey_icon.svg").is_file()
     assert (repo_root / "assets" / "molkey_icon_256.png").is_file()
     assert (repo_root / "assets" / "molkey_icon.ico").is_file()
+    assert not QImage(str(repo_root / "assets" / "molkey_icon.ico")).isNull()
+
+
+def test_brand_icon_corners_are_transparent() -> None:
+    """Rounded tile corners must remain transparent in the rendered PNG."""
+    repo_root = Path(__file__).resolve().parents[3]
+    image = QImage(str(repo_root / "assets" / "molkey_icon_256.png"))
+    assert image.format() in (
+        QImage.Format.Format_ARGB32,
+        QImage.Format.Format_ARGB32_Premultiplied,
+        QImage.Format.Format_RGBA8888,
+    ), "icon must carry an alpha channel"
+    last = image.width() - 2
+    for corner in ((1, 1), (last, 1), (1, last), (last, last)):
+        assert image.pixelColor(*corner).alpha() == 0, f"corner {corner} not transparent"
 
 
 def test_window_icon_matches_brand_asset(qtbot) -> None:
