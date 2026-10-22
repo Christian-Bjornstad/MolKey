@@ -39,6 +39,10 @@ receive generated keys only. Never send `MolKey-register.xlsx` externally.
 
 ## Quick start
 
+Colleagues can follow the [Norwegian Word user guide](docs/MolKey_brukerveiledning.docx)
+for step-by-step instructions with annotated screenshots, including Excel lookup
+and recovery when the workbook is locked.
+
 ```bash
 uv sync                       # create environment (or: pip install -e .[dev])
 uv run molkey                 # start the desktop app

@@ -325,9 +325,7 @@ class MainWindow(QMainWindow):
                 return
             self._remember_initials(initials_input.text())
             output.setText(record.pseudonymous_key)
-            feedback.setText(
-                f"Permanent key ready — created by {record.created_by}. The mapping is stored in the shared registry."
-            )
+            feedback.setText(f"Permanent key ready — created by {record.created_by}.")
             copy.setEnabled(True)
             self._refresh_registry()
             self._show_workbook_status(feedback)
@@ -795,8 +793,8 @@ class MainWindow(QMainWindow):
         card_layout = QVBoxLayout(card)
         card_layout.addWidget(QLabel("Shared registry", objectName="sectionTitle"))
         help_text = QLabel(
-            "Choose the hospital's approved secure shared folder. MolKey stores the SQLite database, "
-            "patient-to-key mappings, writer locks, and backups below this location.",
+            "Choose the hospital's approved secure shared folder. MolKey stores the database, Excel register, "
+            "patient-to-key mappings, and writer lock here.",
             objectName="settingsHelp",
         )
         help_text.setWordWrap(True)
