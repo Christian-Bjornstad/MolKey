@@ -57,9 +57,7 @@ def _spawn_and_collect(targets: list[tuple[object, tuple]]) -> list[dict[str, ob
     results: list[dict[str, object]] = [queue.get(timeout=WORKER_TIMEOUT_SECONDS) for _ in processes]
     for process in processes:
         process.join(timeout=WORKER_TIMEOUT_SECONDS)
-    assert all(process.exitcode == 0 for process in processes), [
-        process.exitcode for process in processes
-    ]
+    assert all(process.exitcode == 0 for process in processes), [process.exitcode for process in processes]
     return results
 
 
@@ -69,9 +67,7 @@ def test_concurrent_processes_write_without_loss(tmp_path: Path) -> None:
 
     workers = 3
     writes_per_worker = 10
-    results = _spawn_and_collect(
-        [(_unique_writer, (db_path, worker, writes_per_worker)) for worker in range(workers)]
-    )
+    results = _spawn_and_collect([(_unique_writer, (db_path, worker, writes_per_worker)) for worker in range(workers)])
 
     all_errors = [error for result in results for error in result["errors"]]
     assert not all_errors, all_errors

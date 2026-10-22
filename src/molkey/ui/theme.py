@@ -4,7 +4,7 @@ from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication
 
 COLORS = {
-    "primary": "#847CBA",
+    "primary": "#6D659F",
     "primary_hover": "#746CA8",
     "primary_dark": "#5E5794",
     "primary_darker": "#46407A",
@@ -15,8 +15,8 @@ COLORS = {
     "surface": "#FFFFFF",
     "border": "#D0CEE8",
     "text": "#2D2950",
-    "muted": "#7A76A3",
-    "success": "#3A8F6B",
+    "muted": "#6D698F",
+    "success": "#2F785A",
     "warning": "#B88A2E",
     "danger": "#C04040",
 }
@@ -29,11 +29,6 @@ STYLESHEET = """
 }
 QMainWindow, QWidget#centralWidget { background: #F7F6FA; }
 QFrame#sidebar { background: #2D2950; border: none; }
-QLabel#brandMark {
-    background: #847CBA; color: white; font-weight: 700; font-size: 18px;
-    border-radius: 8px; min-width: 38px; max-width: 38px;
-    min-height: 38px; max-height: 38px;
-}
 QLabel#brandName { color: white; font-size: 20px; font-weight: 700; }
 QLabel#brandSubtitle { color: #A8A4D0; font-size: 12px; }
 QPushButton[nav="true"] {
@@ -50,9 +45,9 @@ QLabel#environmentBadge {
 }
 QFrame#topbar { background: white; border-bottom: 1px solid #D0CEE8; }
 QLabel#pageTitle { font-size: 24px; font-weight: 700; color: #2D2950; }
-QLabel#pageDescription { color: #7A76A3; }
+QLabel#pageDescription { color: #6D698F; }
 QPushButton#primaryButton, QPushButton#generateKeyButton, QPushButton#dashboardGenerateButton {
-    background: #847CBA; color: white; border: none; border-radius: 7px;
+    background: #6D659F; color: white; border: none; border-radius: 7px;
     padding: 10px 18px; font-weight: 700;
 }
 QPushButton#primaryButton:hover, QPushButton#generateKeyButton:hover,
@@ -67,26 +62,26 @@ QPushButton#secondaryButton:hover, QPushButton[secondary="true"]:hover {
 QFrame.card, QFrame#metricCard, QFrame#contentCard, QFrame#privacyNotice {
     background: white; border: 1px solid #D0CEE8; border-radius: 10px;
 }
-QLabel#eyebrow { color: #7A76A3; font-size: 12px; font-weight: 700; }
+QLabel#eyebrow { color: #6D698F; font-size: 12px; font-weight: 700; }
 QLabel#metricValue { color: #2D2950; font-size: 30px; font-weight: 700; }
-QLabel#metricDetail { color: #7A76A3; font-size: 12px; }
+QLabel#metricDetail { color: #6D698F; font-size: 12px; }
 QLabel#sectionTitle { color: #2D2950; font-size: 17px; font-weight: 700; }
 QLabel#emptyStateTitle { color: #2D2950; font-size: 16px; font-weight: 700; }
-QLabel#muted { color: #7A76A3; }
+QLabel#muted { color: #6D698F; }
 QFrame#privacyNotice { background: #EFEEF6; border-color: #B8B4D8; }
-QLabel#privacyIcon { color: #847CBA; font-size: 17px; font-weight: 700; }
+QLabel#privacyIcon { color: #6D659F; font-size: 17px; font-weight: 700; }
 QLabel#privacyText { color: #4E4A7A; }
 QFrame#statusBar { background: white; border-top: 1px solid #D0CEE8; }
-QLabel#statusGood { color: #3A8F6B; font-weight: 700; }
+QLabel#statusGood { color: #2F785A; font-weight: 700; }
 QLabel#statusError { color: #C04040; font-weight: 700; }
 QLabel#fieldLabel { color: #2D2950; font-weight: 700; }
 QLabel#settingsHelp { color: #5A5688; line-height: 1.4; }
-QLabel#statusPath, QLabel#detailKeyValue { color: #7A76A3; font-family: "Cascadia Mono", "Consolas", monospace; }
+QLabel#statusPath, QLabel#detailKeyValue { color: #6D698F; font-family: "Cascadia Mono", "Consolas", monospace; }
 QLineEdit {
     background: white; border: 1px solid #B8B4D8; border-radius: 7px;
-    padding: 9px 12px; selection-background-color: #847CBA;
+    padding: 9px 12px; selection-background-color: #6D659F;
 }
-QLineEdit:focus { border: 2px solid #847CBA; }
+QLineEdit:focus { border: 2px solid #6D659F; }
 QTableWidget { background: white; border: 1px solid #D0CEE8; border-radius: 8px; gridline-color: #E8E6F0; }
 QHeaderView::section {
     background: #EFEEF6; padding: 9px; border: none;
@@ -115,6 +110,7 @@ QToolTip {
 }
 """
 
+
 def build_palette() -> QPalette:
     """Return a fixed light palette so dark system schemes never bleed through."""
     palette = QPalette()
@@ -137,4 +133,3 @@ def build_palette() -> QPalette:
 def apply_palette(app: QApplication) -> None:
     """Install the fixed light palette on the application."""
     app.setPalette(build_palette())
-

@@ -3,6 +3,8 @@
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from molkey.infrastructure.migrations import SCHEMA_VERSION, migrate
 
 
@@ -85,10 +87,10 @@ def test_new_keys_written_after_upgrade_carry_operator(tmp_path: Path) -> None:
     migrate(db_path)
 
     service = PatientKeyService(db_path)
-    record = service.get_or_create("27NEW00001", initials="CFB")
+    record = service.get_or_create("27NEW00001", initials="ABC")
     legacy = service.lookup_by_patient("26OUM99999")
 
-    assert record.created_by == "CFB"
+    assert record.created_by == "ABC"
     assert legacy.created_by == "UKJENT"
 
 
@@ -109,7 +111,7 @@ def _make_v3_database(db_path: Path) -> None:
             created_by TEXT NOT NULL DEFAULT 'UKJENT'
         );
         INSERT INTO patient_keys (patient_id, pseudonymous_key, created_at, created_by)
-            VALUES ('26oum99999', 'MK-2026-DEADBEEF', '2026-08-20 10:00:00', 'CFB');
+            VALUES ('26oum99999', 'MK-2026-DEADBEEF', '2026-08-20 10:00:00', 'ABC');
         CREATE TABLE cases (
             id TEXT PRIMARY KEY,
             patient_id TEXT NOT NULL,
@@ -140,7 +142,7 @@ def test_v3_database_uppercases_existing_rows_in_place(tmp_path: Path) -> None:
         conn.close()
 
     assert version == SCHEMA_VERSION
-    assert patient_rows == [("26OUM99999", "CFB")]
+    assert patient_rows == [("26OUM99999", "ABC")]
     assert case_rows == [("PAT-LEGACY", "26OUM99999")]
 
 
@@ -158,3 +160,33 @@ def test_uppercased_rows_resolve_from_any_case_after_upgrade(tmp_path: Path) -> 
         assert record is not None, spelling
         assert record.patient_id == "26OUM99999"
         assert record.pseudonymous_key == "MK-2026-DEADBEEF"
+
+
+def test_failed_upgrade_keeps_previous_schema_and_rows_intact(tmp_path: Path) -> None:
+    """A case-folding collision must not leave half of v4's changes committed."""
+    db_path = tmp_path / "registry.db"
+    _make_v3_database(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO patient_keys (patient_id, pseudonymous_key) VALUES (?, ?)",
+            ("26OUM99999", "MK1234567"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(sqlite3.IntegrityError):
+        migrate(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
+        patient_ids = [row[0] for row in conn.execute("SELECT patient_id FROM patient_keys ORDER BY patient_id")]
+        case_row = conn.execute("SELECT patient_id, case_number FROM cases").fetchone()
+    finally:
+        conn.close()
+
+    assert version == 3
+    assert patient_ids == ["26OUM99999", "26oum99999"]
+    assert case_row == ("pat-legacy", "26oum99999")

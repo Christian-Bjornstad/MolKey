@@ -9,7 +9,6 @@ description = "MolKey - permanent patient pseudonym registry for molecular patho
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 license = { text = "Proprietary" }
-authors = [{ name = "Christian Bjornstad" }]
 dependencies = [
     "PyQt6>=6.7,<7",
     "platformdirs>=4.3,<5",
@@ -30,6 +29,14 @@ molkey = "molkey.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/molkey"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"assets/molkey_icon.ico" = "molkey/assets/molkey_icon.ico"
+"assets/molkey_icon_16.png" = "molkey/assets/molkey_icon_16.png"
+"assets/molkey_icon_32.png" = "molkey/assets/molkey_icon_32.png"
+"assets/molkey_icon_64.png" = "molkey/assets/molkey_icon_64.png"
+"assets/molkey_icon_256.png" = "molkey/assets/molkey_icon_256.png"
+"assets/molkey_icon_512.png" = "molkey/assets/molkey_icon_512.png"
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"

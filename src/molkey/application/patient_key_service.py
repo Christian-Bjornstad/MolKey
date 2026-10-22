@@ -72,12 +72,16 @@ class PatientKeyService:
 
     def _create_unique_key(self, patient_id: str, operator: str) -> PatientKeyRecord:
         for _ in range(self.MAX_KEY_ATTEMPTS):
-            candidate = f"MK{secrets.randbelow(10_000_000):07d}"
+            candidate = self._generate_key()
             try:
                 return self.repository.get_or_create(patient_id, candidate, operator)
             except KeyCollisionError:
                 continue
         raise ValueError("Could not assign a unique MolKey; please try again")
+
+    @staticmethod
+    def _generate_key() -> str:
+        return f"MK{secrets.randbelow(10_000_000):07d}"
 
     def lookup_by_patient(self, patient_id: str) -> PatientKeyRecord | None:
         normalised = patient_id.strip().upper()
@@ -99,10 +103,8 @@ class PatientKeyService:
 
     def process_batch(self, patient_ids: list[str], initials: str) -> BatchResult:
         operator = self._normalise_initials(initials)
-        items: list[PatientKeyRecord] = []
+        unique_ids: list[str] = []
         seen: set[str] = set()
-        reused_count = 0
-        created_count = 0
         duplicate_count = 0
         invalid_count = 0
 
@@ -116,19 +118,17 @@ class PatientKeyService:
                 duplicate_count += 1
                 continue
             seen.add(normalised)
-            existing = self.repository.get_by_patient(normalised)
-            if existing is not None:
-                items.append(existing)
-                reused_count += 1
-            else:
-                try:
-                    record = self._create_unique_key(normalised, operator)
-                except Exception:
-                    if created_count:
-                        self.refresh_registry_workbook()
-                    raise
-                items.append(record)
-                created_count += 1
+            unique_ids.append(normalised)
+
+        if unique_ids:
+            try:
+                items, reused_count, created_count = self.repository.get_or_create_many(
+                    unique_ids, operator, self._generate_key, self.MAX_KEY_ATTEMPTS
+                )
+            except KeyCollisionError as exc:
+                raise ValueError(str(exc)) from exc
+        else:
+            items, reused_count, created_count = [], 0, 0
 
         if created_count:
             self.refresh_registry_workbook()

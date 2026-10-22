@@ -22,6 +22,8 @@ def test_brand_icon_asset_exists_in_repo() -> None:
     assert (repo_root / "assets" / "molkey_icon_256.png").is_file()
     assert (repo_root / "assets" / "molkey_icon.ico").is_file()
     assert not QImage(str(repo_root / "assets" / "molkey_icon.ico")).isNull()
+    ico = QIcon(str(repo_root / "assets" / "molkey_icon.ico"))
+    assert {size.width() for size in ico.availableSizes()} == {16, 32, 64, 256}
 
 
 def test_brand_icon_corners_are_transparent() -> None:

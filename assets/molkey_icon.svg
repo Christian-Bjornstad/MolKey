@@ -1,13 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
   <title id="title">MolKey</title>
-  <desc id="description">A white key with a turquoise DNA double helix in its circular bow.</desc>
-  <rect x="8" y="8" width="240" height="240" rx="54" fill="#102A43"/>
-  <circle cx="91" cy="119" r="52" fill="none" stroke="#F3FAFC" stroke-width="18"/>
-  <path d="M145 119H217" fill="none" stroke="#F3FAFC" stroke-width="18" stroke-linecap="round"/>
-  <path d="M181 121V150M207 121V143" fill="none" stroke="#F3FAFC" stroke-width="17" stroke-linecap="round"/>
-  <g fill="none" stroke="#27D3C3" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M77 87C77 98 105 99 105 110C105 121 77 121 77 132C77 143 105 144 105 155" stroke-width="6"/>
-    <path d="M105 87C105 98 77 99 77 110C77 121 105 121 105 132C105 143 77 144 77 155" stroke-width="6"/>
-    <path d="M78 90H104M78 110H104M78 132H104M78 152H104" stroke-width="4"/>
+  <desc id="description">A key with a DNA double helix in its bow, on an indigo tile.</desc>
+  <defs>
+    <linearGradient id="tile" x1="20" y1="18" x2="238" y2="242" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#393366"/>
+      <stop offset="1" stop-color="#202341"/>
+    </linearGradient>
+    <linearGradient id="key" x1="48" y1="59" x2="215" y2="183" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DCDCF5"/>
+    </linearGradient>
+  </defs>
+  <rect x="5" y="5" width="246" height="246" rx="57" fill="url(#tile)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="91" cy="128" r="48" stroke="url(#key)" stroke-width="17"/>
+    <path d="M140 128H214" stroke="url(#key)" stroke-width="17"/>
+    <path d="M181 129V157M207 129V150" stroke="url(#key)" stroke-width="15"/>
+    <g stroke="#55DFD1">
+      <path d="M78 96C78 109 104 109 104 119S78 136 78 146S104 153 104 160" stroke-width="6"/>
+      <path d="M104 96C104 109 78 109 78 119S104 136 104 146S78 153 78 160" stroke-width="6"/>
+      <path d="M82 101H100M82 116H100M82 136H100M82 155H100" stroke-width="4"/>
+    </g>
   </g>
 </svg>
