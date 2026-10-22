@@ -121,8 +121,9 @@ src/molkey/
   generate keys simultaneously; commits wait out active readers.
 - **Theming:** explicit dialog/messagebox/tooltip styles plus an application-wide
   fixed light palette so Windows dark mode can never produce unreadable popups.
-- **Icon:** an ivory key with a mint DNA double helix on an indigo tile. The editable source is
-  `assets/molkey_icon.svg`; regenerate the transparent PNG sizes and Windows
+- **Icon:** a diagonal pearl key with a molecular hexagon and crossed genome
+  strands on a deep indigo tile. The editable source is `assets/molkey_icon.svg`;
+  regenerate the transparent PNG sizes and Windows
   `molkey_icon.ico` with:
 
   ```bash

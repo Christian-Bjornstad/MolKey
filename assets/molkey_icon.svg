@@ -1,25 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
   <title id="title">MolKey</title>
-  <desc id="description">A key with a DNA double helix in its bow, on an indigo tile.</desc>
+  <desc id="description">A diagonal genomic key with a molecular hexagon and one bright DNA crossing.</desc>
   <defs>
-    <linearGradient id="tile" x1="20" y1="18" x2="238" y2="242" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#393366"/>
-      <stop offset="1" stop-color="#202341"/>
+    <linearGradient id="night" x1="23" y1="13" x2="238" y2="249" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#403A7C"/>
+      <stop offset=".52" stop-color="#262A58"/>
+      <stop offset="1" stop-color="#152642"/>
     </linearGradient>
-    <linearGradient id="key" x1="48" y1="59" x2="215" y2="183" gradientUnits="userSpaceOnUse">
+    <linearGradient id="pearl" x1="64" y1="41" x2="222" y2="181" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#DCDCF5"/>
+      <stop offset="1" stop-color="#D9F2F3"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="66" y1="79" x2="105" y2="127" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BBFFF0"/>
+      <stop offset="1" stop-color="#37E3C4"/>
     </linearGradient>
   </defs>
-  <rect x="5" y="5" width="246" height="246" rx="57" fill="url(#tile)"/>
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="91" cy="128" r="48" stroke="url(#key)" stroke-width="17"/>
-    <path d="M140 128H214" stroke="url(#key)" stroke-width="17"/>
-    <path d="M181 129V157M207 129V150" stroke="url(#key)" stroke-width="15"/>
-    <g stroke="#55DFD1">
-      <path d="M78 96C78 109 104 109 104 119S78 136 78 146S104 153 104 160" stroke-width="6"/>
-      <path d="M104 96C104 109 78 109 78 119S104 136 104 146S78 153 78 160" stroke-width="6"/>
-      <path d="M82 101H100M82 116H100M82 136H100M82 155H100" stroke-width="4"/>
+  <rect x="4" y="4" width="248" height="248" rx="54" fill="url(#night)"/>
+  <path d="M24 118C29 64 67 27 118 20" fill="none" stroke="#8983CB" stroke-width="3" opacity=".27"/>
+  <g transform="translate(128 128) scale(1.13) translate(-128 -128)">
+    <g transform="rotate(39 128 128)" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M82 57Q86 54 91 57L123 76Q128 79 128 85V121Q128 126 123 129L91 148Q86 151 82 148L49 129Q44 126 44 121V85Q44 79 49 76Z" fill="none" stroke="url(#pearl)" stroke-width="17"/>
+      <path d="M129 103H213" stroke="url(#pearl)" stroke-width="22"/>
+      <path d="M186 104V136" stroke="url(#pearl)" stroke-width="21"/>
+      <path d="M67 80C94 94 95 112 105 125" fill="none" stroke="url(#mint)" stroke-width="10"/>
+      <path d="M105 80C78 94 77 112 67 125" fill="none" stroke="#7FAAFF" stroke-width="10"/>
+      <circle cx="67" cy="80" r="5" fill="#C5FFF3"/>
+      <circle cx="105" cy="125" r="5" fill="#46E7C6"/>
     </g>
   </g>
 </svg>
