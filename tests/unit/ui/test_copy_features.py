@@ -32,7 +32,7 @@ def _build_window(qtbot, tmp_path: Path, seed: int = 0):  # noqa: ANN001
     )
     qtbot.addWidget(window)
     service = PatientKeyService(db_path)
-    records = [service.get_or_create(f"26OUM{i:05d}", initials="CFB") for i in range(seed)]
+    records = [service.get_or_create(f"26OUM{i:05d}", initials="ABC") for i in range(seed)]
     if hasattr(window, "_refresh_registry"):
         window._refresh_registry()
     return window, service, records
@@ -78,9 +78,7 @@ def test_detail_dialog_values_are_mouse_selectable(qtbot, tmp_path: Path) -> Non
     window._open_registry_detail(0)
     dialog = window.findChild(QDialog, "registryDetailDialog")
 
-    value_labels = dialog.findChildren(QLabel, "detailKeyValue") + dialog.findChildren(
-        QLabel, "detailPatientValue"
-    )
+    value_labels = dialog.findChildren(QLabel, "detailKeyValue") + dialog.findChildren(QLabel, "detailPatientValue")
     assert len(value_labels) >= 2
     for label in value_labels:
         interaction = label.textInteractionFlags()
@@ -110,16 +108,13 @@ def test_ctrl_c_on_registry_copies_every_selected_key(qtbot, tmp_path: Path) -> 
 
     QGuiApplication.clipboard().clear()
     window._copy_selected_rows()
-    expected = "\n".join(
-        window.registry_table.item(row, 1).text()
-        for row in range(window.registry_table.rowCount())
-    )
+    expected = "\n".join(window.registry_table.item(row, 1).text() for row in range(window.registry_table.rowCount()))
     assert _clipboard_text() == expected
 
 
 def test_batch_results_table_also_copies_selected_keys(qtbot, tmp_path: Path) -> None:
     window, _, _records = _build_window(qtbot, tmp_path, seed=0)
-    window.operator_initials = "CFB"
+    window.operator_initials = "ABC"
     window.batch_input.setPlainText("26OUM00001\n26OUM00002\n")
     window._process_batch()
     table = window.findChild(QTableWidget, "batchResultsTable")
@@ -161,7 +156,7 @@ def test_generate_dialog_offers_copy_of_new_key(qtbot, tmp_path: Path) -> None:
     window, _, _records = _build_window(qtbot, tmp_path, seed=0)
     window.findChild(QPushButton, "generateKeyButton").click()
     dialog = window.findChild(QDialog, "generateKeyDialog")
-    dialog.findChild(QLineEdit, "dialogInitialsInput").setText("CFB")
+    dialog.findChild(QLineEdit, "dialogInitialsInput").setText("ABC")
     dialog.findChild(QLineEdit, "patientIdInput").setText("26OUM42424")
 
     confirm = dialog.findChild(QPushButton, "confirmGenerateButton")

@@ -19,9 +19,7 @@ from molkey.ui.main_window import MainWindow
 def connected_window(qtbot, tmp_path: Path) -> MainWindow:
     db_path = tmp_path / "registry.db"
     migrate(db_path)
-    window = MainWindow(
-        registry_path=str(tmp_path), registry_connected=True, database_path=db_path
-    )
+    window = MainWindow(registry_path=str(tmp_path), registry_connected=True, database_path=db_path)
     qtbot.addWidget(window)
     return window
 
@@ -88,7 +86,7 @@ def test_single_generate_reuses_permanent_key(qtbot, tmp_path):
 
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     dialog = window.findChild(QDialog, "generateKeyDialog")
-    dialog.findChild(QLineEdit, "dialogInitialsInput").setText("CFB")
+    dialog.findChild(QLineEdit, "dialogInitialsInput").setText("ABC")
     dialog.findChild(QLineEdit, "patientIdInput").setText("PATUI001")
     qtbot.mouseClick(dialog.findChild(QPushButton, "confirmGenerateButton"), Qt.MouseButton.LeftButton)
 
@@ -106,14 +104,12 @@ def test_single_generate_reuses_permanent_key(qtbot, tmp_path):
 
 def test_batch_paste_generates_review_and_keys_only_export(qtbot, tmp_path, monkeypatch):
     window = connected_window(qtbot, tmp_path)
-    window.findChild(QLineEdit, "operatorInitialsInput").setText("CFB")
+    window.findChild(QLineEdit, "operatorInitialsInput").setText("ABC")
     qtbot.mouseClick(window.navigation_buttons[1], Qt.MouseButton.LeftButton)
     batch_input = window.findChild(QTextEdit, "batchPatientIdsInput")
     batch_input.setPlainText("PAT001\nPAT002\nPAT001\n")
 
-    qtbot.mouseClick(
-        window.findChild(QPushButton, "processBatchButton"), Qt.MouseButton.LeftButton
-    )
+    qtbot.mouseClick(window.findChild(QPushButton, "processBatchButton"), Qt.MouseButton.LeftButton)
 
     table = window.findChild(QTableWidget, "batchResultsTable")
     assert table.rowCount() == 2
@@ -126,9 +122,7 @@ def test_batch_paste_generates_review_and_keys_only_export(qtbot, tmp_path, monk
         "getSaveFileName",
         staticmethod(lambda *args, **kwargs: (str(destination), "CSV (*.csv)")),
     )
-    qtbot.mouseClick(
-        window.findChild(QPushButton, "exportBatchButton"), Qt.MouseButton.LeftButton
-    )
+    qtbot.mouseClick(window.findChild(QPushButton, "exportBatchButton"), Qt.MouseButton.LeftButton)
 
     with destination.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
@@ -138,7 +132,7 @@ def test_batch_paste_generates_review_and_keys_only_export(qtbot, tmp_path, monk
 
 def test_lookup_works_in_both_directions(qtbot, tmp_path):
     window = connected_window(qtbot, tmp_path)
-    record = window.key_service.get_or_create("PATLOOKUP", initials="CFB")
+    record = window.key_service.get_or_create("PATLOOKUP", initials="ABC")
     qtbot.mouseClick(window.navigation_buttons[2], Qt.MouseButton.LeftButton)
     lookup = window.findChild(QLineEdit, "lookupInput")
 
@@ -153,7 +147,7 @@ def test_lookup_works_in_both_directions(qtbot, tmp_path):
 
 def test_registry_page_lists_internal_mapping(qtbot, tmp_path):
     window = connected_window(qtbot, tmp_path)
-    record = window.key_service.get_or_create("PATINTERNAL", initials="CFB")
+    record = window.key_service.get_or_create("PATINTERNAL", initials="ABC")
 
     qtbot.mouseClick(window.navigation_buttons[3], Qt.MouseButton.LeftButton)
 

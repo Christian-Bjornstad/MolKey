@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 
 from PyQt6.QtCore import QSettings
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication
 
 from molkey.config import ConfigError, RegistryConfig
+from molkey.icon_assets import load_icon
 from molkey.infrastructure.migrations import migrate
 from molkey.ui.main_window import MainWindow
 from molkey.ui.theme import STYLESHEET, apply_palette
@@ -30,11 +30,8 @@ def resolve_registry_config(settings: QSettings, *, validate_root: bool = True) 
 
 
 def initialize_registry(config: RegistryConfig) -> None:
-    """Create required registry folders and migrate the shared database."""
+    """Create the writer-lock folder and migrate the shared database."""
     config.locks_dir.mkdir(parents=True, exist_ok=True)
-    config.packages_dir.mkdir(parents=True, exist_ok=True)
-    config.staging_dir.mkdir(parents=True, exist_ok=True)
-    config.backups_dir.mkdir(parents=True, exist_ok=True)
     migrate(config.database_path)
 
 
@@ -43,9 +40,7 @@ def main() -> int:
     application = QApplication(sys.argv)
     application.setApplicationName("MolKey")
     application.setOrganizationName("MolKey")
-    brand_icon = Path(__file__).resolve().parents[2] / "assets" / "molkey_icon.ico"
-    if brand_icon.is_file():
-        application.setWindowIcon(QIcon(str(brand_icon)))
+    application.setWindowIcon(load_icon("molkey_icon_256.png"))
     apply_palette(application)
     application.setStyleSheet(STYLESHEET)
     application.setFont(QFont("Arial", 10))

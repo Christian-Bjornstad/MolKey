@@ -23,9 +23,9 @@ def test_generated_key_records_operator_initials(tmp_path: Path) -> None:
     migrate(db_path)
     service = PatientKeyService(db_path)
 
-    record = service.get_or_create("26OUM99999", initials="cfb")
+    record = service.get_or_create("26OUM99999", initials="abc")
 
-    assert record.created_by == "CFB"
+    assert record.created_by == "ABC"
 
 
 def test_key_created_by_one_session_is_visible_to_another_with_initials(tmp_path: Path) -> None:
@@ -34,13 +34,13 @@ def test_key_created_by_one_session_is_visible_to_another_with_initials(tmp_path
     migrate(db_path)
     creator = PatientKeyService(db_path)
 
-    created = creator.get_or_create("26OUM99999", initials="CFB")
+    created = creator.get_or_create("26OUM99999", initials="ABC")
 
     colleague = PatientKeyService(db_path)
     found = colleague.lookup_by_patient("26OUM99999")
     assert found is not None
     assert found.pseudonymous_key == created.pseudonymous_key
-    assert found.created_by == "CFB"
+    assert found.created_by == "ABC"
     assert colleague.list_recent() == [found]
 
 
@@ -58,7 +58,7 @@ def test_existing_patient_lookup_still_works_without_initials(tmp_path: Path) ->
     db_path = tmp_path / "registry.db"
     migrate(db_path)
     creator = PatientKeyService(db_path)
-    created = creator.get_or_create("26OUM99999", initials="CFB")
+    created = creator.get_or_create("26OUM99999", initials="ABC")
 
     reader = PatientKeyService(db_path)
     assert reader.lookup_by_patient("26OUM99999") == created

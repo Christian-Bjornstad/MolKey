@@ -109,7 +109,7 @@ def writer_lock(registry_root: Path, timeout: float = 5.0) -> Iterator[None]:
 def get_registry_root_from_db(db_path: Path) -> Path:
     """Extract registry root from database path.
 
-    Assumes db_path is {registry_root}/registry.db
+    Assumes the database file lives directly inside the registry root.
     """
     return db_path.parent
 
