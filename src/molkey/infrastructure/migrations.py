@@ -145,6 +145,22 @@ UPDATE patient_keys SET patient_id = UPPER(patient_id) WHERE patient_id GLOB '*[
 """
 
 
+def _execute_migration(conn: sqlite3.Connection, script: str) -> None:
+    """Execute a migration without ``executescript`` committing the transaction.
+
+    ``sqlite3.complete_statement`` keeps trigger bodies intact while splitting
+    the bundled SQL into statements that can run under the caller's transaction.
+    """
+    statement = ""
+    for line in script.splitlines(keepends=True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            conn.execute(statement)
+            statement = ""
+    if statement.strip():
+        raise ValueError("Incomplete SQL migration statement")
+
+
 def migrate(db_path: Path) -> None:
     """Apply schema migrations to the database.
 
@@ -170,10 +186,10 @@ def migrate(db_path: Path) -> None:
                 cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")
                 if cursor.fetchone() is None:
                     # Fresh database - apply all migrations.
-                    conn.executescript(MIGRATION_001)
-                    conn.executescript(MIGRATION_002)
-                    conn.executescript(MIGRATION_003)
-                    conn.executescript(MIGRATION_004)
+                    _execute_migration(conn, MIGRATION_001)
+                    _execute_migration(conn, MIGRATION_002)
+                    _execute_migration(conn, MIGRATION_003)
+                    _execute_migration(conn, MIGRATION_004)
                     conn.execute(
                         "INSERT INTO schema_version (version) VALUES (?)",
                         (SCHEMA_VERSION,),
@@ -192,13 +208,13 @@ def migrate(db_path: Path) -> None:
                         )
 
                     if current_version < 1:
-                        conn.executescript(MIGRATION_001)
+                        _execute_migration(conn, MIGRATION_001)
                     if current_version < 2:
-                        conn.executescript(MIGRATION_002)
+                        _execute_migration(conn, MIGRATION_002)
                     if current_version < 3:
-                        conn.executescript(MIGRATION_003)
+                        _execute_migration(conn, MIGRATION_003)
                     if current_version < 4:
-                        conn.executescript(MIGRATION_004)
+                        _execute_migration(conn, MIGRATION_004)
                     if current_version < SCHEMA_VERSION:
                         conn.execute(
                             "UPDATE schema_version SET version = ?, applied_at = datetime('now')",

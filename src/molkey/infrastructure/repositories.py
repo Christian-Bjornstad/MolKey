@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +21,13 @@ def normalise_external_id(value: str) -> str:
     differ only by case, and every lookup is case-insensitive.
     """
     return value.strip().upper()
+
+
+def _normalise_patient_id(value: str) -> str:
+    raw = value.strip()
+    if not raw.isascii() or not raw.isalnum():
+        raise ValueError("Patient ID must contain only letters A-Z and digits 0-9")
+    return raw.upper()
 
 
 class RepositoryError(Exception):
@@ -88,9 +96,7 @@ class PatientKeyRepository:
         self.db_path = db_path
 
     def get_or_create(self, patient_id: str, pseudonymous_key: str, created_by: str) -> PatientKeyRecord:
-        normalised_id = normalise_external_id(patient_id)
-        if not patient_id.strip().isascii() or not patient_id.strip().isalnum():
-            raise ValueError("Patient ID must contain only letters A-Z and digits 0-9")
+        normalised_id = _normalise_patient_id(patient_id)
         with transaction(self.db_path) as conn:
             conn.execute(
                 """
@@ -110,6 +116,52 @@ class PatientKeyRepository:
         if row is None:
             raise KeyCollisionError("Generated MolKey is already assigned")
         return _patient_key_from_row(row)
+
+    def get_or_create_many(
+        self,
+        patient_ids: list[str],
+        created_by: str,
+        generate_key: Callable[[], str],
+        max_key_attempts: int,
+    ) -> tuple[list[PatientKeyRecord], int, int]:
+        """Resolve a batch in one transaction; a late collision rolls it all back."""
+        if max_key_attempts < 1:
+            raise ValueError("max_key_attempts must be positive")
+        normalised_ids = [_normalise_patient_id(patient_id) for patient_id in patient_ids]
+        records: list[PatientKeyRecord] = []
+        reused_count = 0
+        created_count = 0
+        with transaction(self.db_path) as conn:
+            for patient_id in normalised_ids:
+                row = conn.execute(
+                    "SELECT patient_id, pseudonymous_key, created_at, created_by "
+                    "FROM patient_keys WHERE patient_id = ?",
+                    (patient_id,),
+                ).fetchone()
+                if row is not None:
+                    reused_count += 1
+                else:
+                    for _ in range(max_key_attempts):
+                        candidate = normalise_external_id(generate_key())
+                        cursor = conn.execute(
+                            "INSERT INTO patient_keys (patient_id, pseudonymous_key, created_by) "
+                            "VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+                            (patient_id, candidate, normalise_external_id(created_by)),
+                        )
+                        if cursor.rowcount == 1:
+                            row = conn.execute(
+                                "SELECT patient_id, pseudonymous_key, created_at, created_by "
+                                "FROM patient_keys WHERE patient_id = ?",
+                                (patient_id,),
+                            ).fetchone()
+                            created_count += 1
+                            break
+                    else:
+                        raise KeyCollisionError("Could not assign a unique MolKey; please try again")
+                if row is None:  # pragma: no cover - a successful insert always yields a row
+                    raise RepositoryError(f"Could not read assigned MolKey for {patient_id}")
+                records.append(_patient_key_from_row(row))
+        return records, reused_count, created_count
 
     def get_by_patient(self, patient_id: str) -> PatientKeyRecord | None:
         conn = connect(self.db_path)

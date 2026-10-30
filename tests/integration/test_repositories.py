@@ -146,9 +146,7 @@ def test_repositories_list_newest_records_for_ui(tmp_path: Path) -> None:
     packages.add(_package("SPK-2026-111111111111111111111111"))
 
     assert [record.case_id for record in cases.list_recent()] == ["CASE-NEW", "CASE-ABC123"]
-    assert [record.package_id for record in packages.list_recent()] == [
-        "SPK-2026-111111111111111111111111"
-    ]
+    assert [record.package_id for record in packages.list_recent()] == ["SPK-2026-111111111111111111111111"]
 
 
 def test_package_repository_round_trips_internal_notes(tmp_path: Path) -> None:

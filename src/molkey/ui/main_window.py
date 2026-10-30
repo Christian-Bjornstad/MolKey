@@ -9,13 +9,14 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PyQt6.QtCore import QSettings, Qt, QTimer, QUrl
-from PyQt6.QtGui import QDesktopServices, QFont, QGuiApplication, QIcon, QKeySequence, QShortcut
+from PyQt6.QtGui import QDesktopServices, QFont, QGuiApplication, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -33,6 +34,7 @@ from PyQt6.QtWidgets import (
 
 from molkey.application.patient_key_service import BatchResult, PatientKeyService
 from molkey.config import ConfigError, RegistryConfig, _is_mapped_drive
+from molkey.icon_assets import load_icon
 from molkey.infrastructure.database import DatabaseError
 from molkey.infrastructure.migrations import migrate
 from molkey.infrastructure.repositories import PatientKeyRecord
@@ -104,10 +106,8 @@ class MainWindow(QMainWindow):
         batch_copy.activated.connect(self._copy_batch_keys)
 
     def _set_brand_icon(self) -> None:
-        """Apply the MolKey brand icon from the generated repo assets."""
-        asset = Path(__file__).resolve().parents[3] / "assets" / "molkey_icon_256.png"
-        if asset.is_file():
-            self.setWindowIcon(QIcon(str(asset)))
+        """Apply the MolKey brand icon from the installed package or source checkout."""
+        self.setWindowIcon(load_icon("molkey_icon_256.png"))
 
     def _build_ui(self) -> None:
         central = QWidget(objectName="centralWidget")
@@ -138,7 +138,11 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(20, 24, 20, 18)
         layout.setSpacing(8)
         brand_row = QHBoxLayout()
-        brand_row.addWidget(QLabel("MK", objectName="brandMark", alignment=Qt.AlignmentFlag.AlignCenter))
+        brand_icon = QLabel(objectName="brandIcon", alignment=Qt.AlignmentFlag.AlignCenter)
+        brand_icon.setAccessibleName("MolKey logo")
+        brand_icon.setFixedSize(42, 42)
+        brand_icon.setPixmap(load_icon("molkey_icon_64.png").pixmap(42, 42))
+        brand_row.addWidget(brand_icon)
         brand_text = QVBoxLayout()
         brand_text.setSpacing(0)
         brand_text.addWidget(QLabel("MolKey", objectName="brandName"))
@@ -218,7 +222,7 @@ class MainWindow(QMainWindow):
         card_layout.addWidget(QLabel("Your initials", objectName="fieldLabel"))
         self.operator_initials_input = QLineEdit(objectName="operatorInitialsInput")
         self.operator_initials_input.setAccessibleName("Operator initials")
-        self.operator_initials_input.setPlaceholderText("e.g. CFB")
+        self.operator_initials_input.setPlaceholderText("e.g. AB")
         self.operator_initials_input.setMaxLength(4)
         self.operator_initials_input.setText(self.operator_initials)
         self.operator_initials_input.textChanged.connect(self._remember_initials)
@@ -280,7 +284,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("Your initials", objectName="fieldLabel"))
         initials_input = QLineEdit(objectName="dialogInitialsInput")
         initials_input.setMaxLength(4)
-        initials_input.setPlaceholderText("e.g. CFB")
+        initials_input.setPlaceholderText("e.g. AB")
         initials_input.setText(self.operator_initials)
         layout.addWidget(initials_input)
         layout.addWidget(QLabel("Internal patient ID", objectName="fieldLabel"))
@@ -304,7 +308,16 @@ class MainWindow(QMainWindow):
         close.rejected.connect(dialog.reject)
         layout.addWidget(close)
 
+        def clear_result() -> None:
+            output.clear()
+            feedback.clear()
+            copy.setEnabled(False)
+
+        patient_input.textChanged.connect(clear_result)
+        initials_input.textChanged.connect(clear_result)
+
         def create() -> None:
+            clear_result()
             try:
                 record = self.key_service.get_or_create(patient_input.text(), initials_input.text())
             except (ValueError, OSError, sqlite3.Error, DatabaseError, RegistryBusyError) as exc:
@@ -312,9 +325,7 @@ class MainWindow(QMainWindow):
                 return
             self._remember_initials(initials_input.text())
             output.setText(record.pseudonymous_key)
-            feedback.setText(
-                f"Permanent key ready — created by {record.created_by}. The mapping is stored in the shared registry."
-            )
+            feedback.setText(f"Permanent key ready — created by {record.created_by}.")
             copy.setEnabled(True)
             self._refresh_registry()
             self._show_workbook_status(feedback)
@@ -335,6 +346,7 @@ class MainWindow(QMainWindow):
         guidance = QLabel(
             "Paste one patient ID per line, or import the first column of a CSV. Existing patients keep their "
             "permanent key. IDs may contain letters and digits only. "
+            "Duplicate IDs appear once. Correct invalid IDs before processing. "
             "Exports contain only MolKeys in the reviewed order.",
             objectName="settingsHelp",
         )
@@ -342,6 +354,7 @@ class MainWindow(QMainWindow):
         card_layout.addWidget(guidance)
         self.batch_input = QTextEdit(objectName="batchPatientIdsInput")
         self.batch_input.setPlaceholderText("26OUM00001\n26OUM00002\n26OUM00003")
+        self.batch_input.textChanged.connect(self._invalidate_batch_result)
         card_layout.addWidget(self.batch_input)
         action_row = QHBoxLayout()
         import_button = QPushButton("Import CSV", objectName="importBatchButton")
@@ -358,31 +371,75 @@ class MainWindow(QMainWindow):
         card_layout.addLayout(action_row)
         self.batch_summary = QLabel("No batch processed", objectName="batchSummary")
         card_layout.addWidget(self.batch_summary)
-        self.batch_results = QTableWidget(0, 2, objectName="batchResultsTable")
-        self.batch_results.setHorizontalHeaderLabels(["MolKey", "Result"])
+        self.batch_results = QTableWidget(0, 3, objectName="batchResultsTable")
+        self.batch_results.setHorizontalHeaderLabels(["Patient ID", "MolKey", "Result"])
         self.batch_results.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.batch_results.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.batch_results.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.batch_results.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         card_layout.addWidget(self.batch_results)
         layout.addWidget(card)
         return page
+
+    def _invalidate_batch_result(self) -> None:
+        self.current_batch = None
+        self.batch_results.setRowCount(0)
+        self.findChild(QPushButton, "exportBatchButton").setEnabled(False)
+        self.batch_summary.setText("Input changed. Process the batch to review keys.")
 
     def _import_batch_csv(self) -> None:
         selected, _filter = QFileDialog.getOpenFileName(self, "Import patient IDs", "", "CSV files (*.csv)")
         if not selected:
             return
         values: list[str] = []
-        with Path(selected).open(newline="", encoding="utf-8-sig") as handle:
-            for row in csv.reader(handle):
-                if row:
-                    values.append(row[0])
+        try:
+            with Path(selected).open(newline="", encoding="utf-8-sig") as handle:
+                sample = handle.read(4096)
+                handle.seek(0)
+                delimiter = ";" if sample.count(";") > sample.count(",") else ","
+                for row in csv.reader(handle, delimiter=delimiter):
+                    if row:
+                        values.append(row[0])
+        except (OSError, UnicodeError, csv.Error) as exc:
+            self.batch_summary.setText(f"Could not import CSV: {exc}")
+            return
+        if values and values[0].strip().casefold() in {
+            "patient id",
+            "patient-id",
+            "pasient id",
+            "pasient-id",
+            "sample id",
+            "sample-id",
+            "prøve id",
+            "prøve-id",
+        }:
+            values.pop(0)
         self.batch_input.setPlainText("\n".join(values))
 
     def _process_batch(self) -> None:
         if self.key_service is None:
             return
+        self._invalidate_batch_result()
         if not self.operator_initials:
             self.batch_summary.setText("Enter your initials on the Dashboard before generating keys.")
             return
         patient_ids = self.batch_input.toPlainText().splitlines()
+        if not patient_ids:
+            self.batch_summary.setText("Paste or import at least one patient ID before processing.")
+            return
+        invalid_lines = [
+            number
+            for number, patient_id in enumerate(patient_ids, start=1)
+            if not patient_id.strip().isascii() or not patient_id.strip().isalnum()
+        ]
+        if invalid_lines:
+            line_list = ", ".join(str(number) for number in invalid_lines[:10])
+            if len(invalid_lines) > 10:
+                line_list += ", …"
+            self.batch_summary.setText(
+                f"Invalid patient ID on line {line_list}. Correct the input and process again; no keys were created."
+            )
+            return
         try:
             self.current_batch = self.key_service.process_batch(patient_ids, self.operator_initials)
         except (ValueError, OSError, sqlite3.Error, DatabaseError, RegistryBusyError) as exc:
@@ -390,13 +447,17 @@ class MainWindow(QMainWindow):
             return
         self.batch_results.setRowCount(len(self.current_batch.items))
         for row, item in enumerate(self.current_batch.items):
-            self.batch_results.setItem(row, 0, QTableWidgetItem(item.pseudonymous_key))
-            self.batch_results.setItem(row, 1, QTableWidgetItem("Ready"))
-        self.batch_summary.setText(
+            self.batch_results.setItem(row, 0, QTableWidgetItem(item.patient_id))
+            self.batch_results.setItem(row, 1, QTableWidgetItem(item.pseudonymous_key))
+            self.batch_results.setItem(row, 2, QTableWidgetItem("Ready"))
+        summary = (
             f"{self.current_batch.created_count} new · {self.current_batch.reused_count} reused · "
-            f"{self.current_batch.duplicate_count} duplicate · {self.current_batch.invalid_count} invalid"
+            f"{self.current_batch.duplicate_count} duplicate omitted · {self.current_batch.invalid_count} invalid"
         )
-        self.findChild(QPushButton, "exportBatchButton").setEnabled(bool(self.current_batch.items))
+        self.batch_summary.setText(summary)
+        self.findChild(QPushButton, "exportBatchButton").setEnabled(
+            bool(self.current_batch.items) and not self.current_batch.invalid_count
+        )
         self._refresh_registry()
         self._show_workbook_status(self.batch_summary)
 
@@ -426,6 +487,9 @@ class MainWindow(QMainWindow):
     def _export_batch(self) -> None:
         if self.key_service is None or self.current_batch is None:
             return
+        if self.current_batch.invalid_count:
+            self.batch_summary.setText("Export disabled: correct invalid IDs and process the batch again.")
+            return
         selected, selected_filter = QFileDialog.getSaveFileName(
             self, "Export MolKeys only", "molkeys.csv", "CSV (*.csv);;JSON (*.json)"
         )
@@ -434,7 +498,11 @@ class MainWindow(QMainWindow):
         destination = Path(selected)
         if not destination.suffix:
             destination = destination.with_suffix(".json" if "JSON" in selected_filter else ".csv")
-        self.key_service.export_keys(self.current_batch.items, destination)
+        try:
+            self.key_service.export_keys(self.current_batch.items, destination)
+        except (OSError, ValueError) as exc:
+            self.batch_summary.setText(f"Could not export keys: {exc}")
+            return
         self.batch_summary.setText(f"Keys-only export saved to {destination}")
 
     def _build_lookup_page(self) -> QWidget:
@@ -446,6 +514,8 @@ class MainWindow(QMainWindow):
         card_layout.addWidget(QLabel("Find patient or MolKey", objectName="sectionTitle"))
         card_layout.addWidget(QLabel("Enter an internal patient ID or a generated MolKey.", objectName="settingsHelp"))
         self.lookup_input = QLineEdit(objectName="lookupInput")
+        self.lookup_input.setAccessibleName("Patient ID or MolKey to look up")
+        self.lookup_input.textChanged.connect(self._clear_lookup_result)
         card_layout.addWidget(self.lookup_input)
         lookup_button = QPushButton("Lookup", objectName="lookupButton")
         lookup_button.clicked.connect(self._lookup)
@@ -468,27 +538,32 @@ class MainWindow(QMainWindow):
         card_layout.addLayout(lookup_copy_row)
         self.copy_lookup_key_button.clicked.connect(
             lambda: (
-                _copy_text(self._last_lookup_record.pseudonymous_key)
-                if self._last_lookup_record is not None
-                else None
+                _copy_text(self._last_lookup_record.pseudonymous_key) if self._last_lookup_record is not None else None
             )
         )
         self.copy_lookup_patient_button.clicked.connect(
-            lambda: (
-                _copy_text(self._last_lookup_record.patient_id)
-                if self._last_lookup_record is not None
-                else None
-            )
+            lambda: _copy_text(self._last_lookup_record.patient_id) if self._last_lookup_record is not None else None
         )
         card_layout.addStretch()
         layout.addWidget(card)
         return page
 
+    def _clear_lookup_result(self) -> None:
+        self._last_lookup_record = None
+        self.copy_lookup_key_button.setEnabled(False)
+        self.copy_lookup_patient_button.setEnabled(False)
+        self.lookup_result.clear()
+
     def _lookup(self) -> None:
         if self.key_service is None:
             return
+        self._clear_lookup_result()
         value = self.lookup_input.text().strip()
-        record = self.key_service.lookup_by_patient(value) or self.key_service.lookup_by_key(value)
+        try:
+            record = self.key_service.lookup_by_patient(value) or self.key_service.lookup_by_key(value)
+        except (OSError, sqlite3.Error, DatabaseError) as exc:
+            self.lookup_result.setText(f"Registry unavailable: {exc}")
+            return
         self._last_lookup_record = record
         has_match = record is not None
         self.copy_lookup_key_button.setEnabled(has_match)
@@ -545,6 +620,7 @@ class MainWindow(QMainWindow):
         self.registry_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.registry_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.registry_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.registry_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.registry_table.doubleClicked.connect(self._open_registry_detail)
         self.registry_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.registry_table.customContextMenuRequested.connect(self._show_registry_context_menu)
@@ -598,8 +674,10 @@ class MainWindow(QMainWindow):
             return
         if self.key_service.workbook_error or not self.key_service.workbook_path.exists():
             self._refresh_registry_workbook()
-        if self.key_service.workbook_error is None and self.key_service.workbook_path.exists():
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.key_service.workbook_path)))
+        if self.key_service.workbook_error is not None or not self.key_service.workbook_path.exists():
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.key_service.workbook_path))):
+            self.registry_count_label.setText("Could not open the Excel register. Open it from the shared folder.")
 
     def _registry_record_for_row(self, row: int) -> PatientKeyRecord | None:
         """Map a table row back to its PatientKeyRecord (rows mirror list order)."""
@@ -611,7 +689,11 @@ class MainWindow(QMainWindow):
 
     def _open_registry_detail(self, index: object) -> None:
         row = int(index.row()) if hasattr(index, "row") and not isinstance(index, int) else index
-        record = self._registry_record_for_row(int(row))
+        try:
+            record = self._registry_record_for_row(int(row))
+        except (OSError, sqlite3.Error, DatabaseError) as exc:
+            self.registry_count_label.setText(f"Registry unavailable: {exc}")
+            return
         if record is None:
             return
         dialog = QDialog(self, objectName="registryDetailDialog")
@@ -699,7 +781,7 @@ class MainWindow(QMainWindow):
 
     def _copy_batch_keys(self) -> None:
         rows = self._selected_rows(self.batch_results)
-        keys = [self.batch_results.item(row, 0).text() for row in rows if self.batch_results.item(row, 0)]
+        keys = [self.batch_results.item(row, 1).text() for row in rows if self.batch_results.item(row, 1)]
         if keys:
             _copy_text("\n".join(keys))
 
@@ -711,8 +793,8 @@ class MainWindow(QMainWindow):
         card_layout = QVBoxLayout(card)
         card_layout.addWidget(QLabel("Shared registry", objectName="sectionTitle"))
         help_text = QLabel(
-            "Choose the hospital's approved secure shared folder. MolKey stores the SQLite database, "
-            "patient-to-key mappings, writer locks, and backups below this location.",
+            "Choose the hospital's approved secure shared folder. MolKey stores the database, Excel register, "
+            "patient-to-key mappings, and writer lock here.",
             objectName="settingsHelp",
         )
         help_text.setWordWrap(True)
@@ -761,9 +843,6 @@ class MainWindow(QMainWindow):
         try:
             config = RegistryConfig.from_root(registry_path)
             config.locks_dir.mkdir(parents=True, exist_ok=True)
-            config.packages_dir.mkdir(parents=True, exist_ok=True)
-            config.staging_dir.mkdir(parents=True, exist_ok=True)
-            config.backups_dir.mkdir(parents=True, exist_ok=True)
             migrate(config.database_path)
         except (ConfigError, OSError, RuntimeError, sqlite3.Error) as exc:
             self._set_settings_feedback(f"MolKey could not connect: {exc}", error=True)

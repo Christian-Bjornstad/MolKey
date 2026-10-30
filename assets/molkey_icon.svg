@@ -1,13 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
   <title id="title">MolKey</title>
-  <desc id="description">A white key with a turquoise DNA double helix in its circular bow.</desc>
-  <rect x="8" y="8" width="240" height="240" rx="54" fill="#102A43"/>
-  <circle cx="91" cy="119" r="52" fill="none" stroke="#F3FAFC" stroke-width="18"/>
-  <path d="M145 119H217" fill="none" stroke="#F3FAFC" stroke-width="18" stroke-linecap="round"/>
-  <path d="M181 121V150M207 121V143" fill="none" stroke="#F3FAFC" stroke-width="17" stroke-linecap="round"/>
-  <g fill="none" stroke="#27D3C3" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M77 87C77 98 105 99 105 110C105 121 77 121 77 132C77 143 105 144 105 155" stroke-width="6"/>
-    <path d="M105 87C105 98 77 99 77 110C77 121 105 121 105 132C105 143 77 144 77 155" stroke-width="6"/>
-    <path d="M78 90H104M78 110H104M78 132H104M78 152H104" stroke-width="4"/>
+  <desc id="description">A DNA double helix flows into a key with two teeth.</desc>
+  <rect x="4" y="4" width="248" height="248" rx="54" fill="#2D2950"/>
+  <g transform="translate(128 0) scale(1.08 1) translate(-128 0)">
+
+  <!-- A broad, continuous blade and two square-cut teeth. -->
+  <path d="M121 154 L210 216" fill="none" stroke="#F4FAF7" stroke-width="30" stroke-linecap="round"/>
+  <path d="M166 184 L147 207 M194 204 L178 225" fill="none" stroke="#F4FAF7" stroke-width="18" stroke-linecap="square"/>
+
+  <!-- The lower white strand flows directly into the blade. -->
+  <path d="M99 105 L80 103 C60 116 51 134 60 151 C69 167 87 173 116 170 C129 169 135 175 143 181 L159 164 C145 153 134 147 119 149 L101 149 C89 149 82 143 82 135 C82 124 91 112 99 105Z" fill="#F4FAF7"/>
+
+  <!-- The upper white turn meets the lower turn behind the turquoise crossing. -->
+  <path d="M108 29 C116 28 136 44 143 56 C153 73 144 87 126 100 L106 94 C119 80 128 72 126 64 C124 55 116 49 106 42 C100 38 101 31 108 29Z" fill="#F4FAF7"/>
+
+  <!-- Two large crossbars are enough to read as DNA at small sizes. -->
+  <path d="M69 73 Q68 69 73 67 L112 55 Q117 54 120 61 Q122 66 117 68 L76 81 Q71 82 69 77Z" fill="#F4FAF7"/>
+
+  <!-- One uninterrupted turquoise strand weaves from the top into the key. -->
+  <path d="M83 33 Q87 31 87 37 L86 51 C85 61 69 67 66 78 C63 89 70 94 82 96 L126 105 C145 109 156 119 156 133 C156 144 150 153 146 161 L132 148 C138 139 141 133 140 127 C139 121 134 118 123 116 L73 106 C47 101 35 89 36 74 C38 56 59 42 83 33Z" fill="#32D7C0"/>
+  <path d="M87 135 Q85 132 90 130 L133 117 Q139 116 141 123 Q143 129 138 131 L94 145 Q89 146 87 141Z" fill="#32D7C0"/>
   </g>
 </svg>

@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+REGISTRY_DB_NAME = "molkey-registry.db"
+
 
 class ConfigError(Exception):
     """Configuration error that is safe to show to users."""
@@ -79,7 +81,7 @@ class RegistryConfig:
 
         return cls(
             root=root,
-            database_path=root / "molkey-registry.db",
+            database_path=root / REGISTRY_DB_NAME,
             packages_dir=root / "packages",
             staging_dir=root / "staging",
             locks_dir=root / "locks",

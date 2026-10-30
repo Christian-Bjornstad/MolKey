@@ -36,8 +36,8 @@ def _navigate_to_registry(window) -> None:  # noqa: ANN001
 def test_registry_page_shows_keys_created_by_other_workstations(qtbot, tmp_path: Path) -> None:
     window = _build_window(qtbot, tmp_path)
     # Two independent "workstations" share the same registry file.
-    PatientKeyService(window.database_path).get_or_create("26OUM99999", initials="CFB")
-    PatientKeyService(window.database_path).get_or_create("26OUM00001", initials="ANB")
+    PatientKeyService(window.database_path).get_or_create("26OUM99999", initials="ABC")
+    PatientKeyService(window.database_path).get_or_create("26OUM00001", initials="XYZ")
 
     _navigate_to_registry(window)
 
@@ -45,15 +45,15 @@ def test_registry_page_shows_keys_created_by_other_workstations(qtbot, tmp_path:
     headers = [window.registry_table.horizontalHeaderItem(i).text() for i in range(4)]
     assert headers == ["Patient ID", "MolKey", "Created", "By"]
     by_column = {window.registry_table.item(row, 3).text() for row in range(2)}
-    assert by_column == {"CFB", "ANB"}
+    assert by_column == {"ABC", "XYZ"}
 
 
 def test_registry_search_filters_by_patient_id_fragment(qtbot, tmp_path: Path) -> None:
     window = _build_window(qtbot, tmp_path)
     service = PatientKeyService(window.database_path)
-    service.get_or_create("26OUM99999", initials="CFB")
-    service.get_or_create("26OUM00001", initials="ANB")
-    service.get_or_create("27ABD12345", initials="CFB")
+    service.get_or_create("26OUM99999", initials="ABC")
+    service.get_or_create("26OUM00001", initials="XYZ")
+    service.get_or_create("27ABD12345", initials="ABC")
     _navigate_to_registry(window)
 
     search = window.findChild(type(window.lookup_input), "registrySearchInput")
@@ -66,15 +66,15 @@ def test_registry_search_filters_by_patient_id_fragment(qtbot, tmp_path: Path) -
 def test_registry_search_matches_molkey_and_initials(qtbot, tmp_path: Path) -> None:
     window = _build_window(qtbot, tmp_path)
     service = PatientKeyService(window.database_path)
-    first = service.get_or_create("26OUM99999", initials="CFB")
-    service.get_or_create("26OUM00001", initials="ANB")
+    first = service.get_or_create("26OUM99999", initials="ABC")
+    service.get_or_create("26OUM00001", initials="XYZ")
     _navigate_to_registry(window)
     search = window.findChild(type(window.lookup_input), "registrySearchInput")
 
     search.setText(first.pseudonymous_key[-4:])
     assert window.registry_table.rowCount() == 1
 
-    search.setText("anb")
+    search.setText("xyz")
     assert window.registry_table.rowCount() == 1
     assert window.registry_table.item(0, 0).text() == "26OUM00001"
 
@@ -110,7 +110,7 @@ def test_generate_dialog_refuses_without_initials_and_shows_error(qtbot, tmp_pat
 def test_initials_are_normalised_stored_and_remembered(qtbot, tmp_path: Path) -> None:
     window = _build_window(qtbot, tmp_path)
     initials_input = window.findChild(type(window.lookup_input), "operatorInitialsInput")
-    initials_input.setText("cfb")
+    initials_input.setText("abc")
 
     window.generate_key_button.click()
     window.findChild(type(window.lookup_input), "patientIdInput").setText("26OUM99999")
@@ -118,8 +118,8 @@ def test_initials_are_normalised_stored_and_remembered(qtbot, tmp_path: Path) ->
     output = window.findChild(type(window.lookup_input), "generatedKeyOutput")
 
     assert output.text().startswith("MK")
-    assert initials_input.text() == "CFB"
-    assert str(window.settings.value("operator/initials")) == "CFB"
+    assert initials_input.text() == "ABC"
+    assert str(window.settings.value("operator/initials")) == "ABC"
 
     # A brand-new window (simulated restart) prefills the remembered initials.
     reopened = MainWindow(
@@ -129,7 +129,7 @@ def test_initials_are_normalised_stored_and_remembered(qtbot, tmp_path: Path) ->
         settings=window.settings,
     )
     qtbot.addWidget(reopened)
-    assert reopened.findChild(type(initials_input), "operatorInitialsInput").text() == "CFB"
+    assert reopened.findChild(type(initials_input), "operatorInitialsInput").text() == "ABC"
 
 
 def test_batch_generation_blocked_with_message_when_initials_missing(qtbot, tmp_path: Path) -> None:
@@ -147,7 +147,7 @@ def test_batch_generation_blocked_with_message_when_initials_missing(qtbot, tmp_
 
 def test_excel_lock_warning_is_visible_and_can_be_cleared(qtbot, tmp_path: Path) -> None:
     window = _build_window(qtbot, tmp_path)
-    window.operator_initials_input.setText("CFB")
+    window.operator_initials_input.setText("ABC")
     window.batch_input.setPlainText("26OUM12345")
     with patch("molkey.infrastructure.registry_workbook.os.replace", side_effect=PermissionError("file in use")):
         window._process_batch()

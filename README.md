@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img alt="MolKey v0.2.0" src="https://img.shields.io/badge/MolKey-v0.2.0-847CBA">
+  <img alt="MolKey v0.2.0" src="https://img.shields.io/badge/MolKey-v0.2.0-393366">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="PyQt6 desktop interface" src="https://img.shields.io/badge/Desktop-PyQt6-41CD52?logo=qt&logoColor=white">
 </p>
@@ -25,19 +25,23 @@ of truth; the protected Excel copy sits beside it on the hospital's secure drive
 | Capability | Detail |
 |---|---|
 | Permanent keys | One random key per patient, reused on every re-import |
-| Batch generation | Paste one ID per line or import a CSV; duplicates are deduplicated, input order preserved |
+| Batch generation | Paste one ID per line or import a CSV; invalid IDs are rejected before creation, duplicates are deduplicated, input order preserved, and the write is atomic |
 | Keys-only export | CSV/JSON containing generated keys **only** — never patient IDs |
 | Bidirectional lookup | Patient ID → key, or key → patient ID (internal use) |
-| Excel register | Protected, searchable `MolKey-register.xlsx` beside `registry.db`, refreshed after new keys |
+| Excel register | Protected, searchable `MolKey-register.xlsx` beside `molkey-registry.db`, refreshed after new keys |
 | Shared registry | SQLite over SMB: rollback journal, `synchronous=FULL`, bounded retries, writer lock |
 | Safe root validation | UNC paths and *active* mapped drives only; plain local paths rejected |
-| Automatic bootstrap | Folders, database, and migrations are created at first start |
+| Automatic bootstrap | Lock folder and database are created at first start; migrations run automatically |
 
 **Privacy model:** patient identifiers remain on the protected registry share,
 including its Excel copy. External systems (sequencing vendors, upload portals)
 receive generated keys only. Never send `MolKey-register.xlsx` externally.
 
 ## Quick start
+
+Colleagues can follow the [Norwegian Word user guide](docs/MolKey_brukerveiledning.docx)
+for step-by-step instructions with annotated screenshots, including Excel lookup
+and recovery when the workbook is locked.
 
 ```bash
 uv sync                       # create environment (or: pip install -e .[dev])
@@ -46,7 +50,7 @@ uv run molkey                 # start the desktop app
 
 1. Open **Settings** and choose the approved secure shared folder
    (`\\server\share\...` or an active mapped drive such as `K:\`).
-2. MolKey creates `registry.db` and its support folders automatically.
+2. MolKey creates `molkey-registry.db` and its lock folder automatically.
 3. Generate single keys from the dashboard, paste a batch under
    **Batch generation**, review, then export keys-only CSV/JSON.
 
@@ -67,8 +71,8 @@ in the share's backup and access review.
 
 Optional environment override:
 
-```bash
-set MOLKEY_REGISTRY_ROOT=\\server\secure-share\MolKey   # per-workstation pinning
+```powershell
+$env:MOLKEY_REGISTRY_ROOT = '\\server\secure-share\MolKey'
 uv run molkey
 ```
 
@@ -97,12 +101,10 @@ src/molkey/
 ├── application/      # PatientKeyService: get-or-create, batches, exports
 ├── infrastructure/   # SQLite database, migrations, repositories, writer lock
 ├── config.py         # secure-root validation (UNC + active mapped drive)
-└── ui/               # PyQt6 main window, theme (#847CBA), fixed light palette
+└── ui/               # PyQt6 main window, accessible theme, fixed light palette
 ```
 
-- **Schema:** v4; migrations run automatically and additively — existing
-  shared databases upgrade in place, legacy keys are attributed as `UKJENT`
-  (unknown). Patient IDs and DIT case numbers are stored in **upper case**
+- **Schema:** v4; migrations run automatically. Patient IDs and DIT case numbers are stored in **upper case**
   and looked up case-insensitively (`26oum12345` = `26OUM12345`).
 - **Identifiers:** new patient IDs contain only letters A–Z and digits 0–9;
   mixed case input is stored uppercase. New MolKeys also contain only letters
@@ -111,7 +113,7 @@ src/molkey/
 - **Shared registry view:** search scans **every** mapping in the shared database,
   including records beyond the first 500; the table shows the first 500 matches
   and displays the full match count. Search by patient ID, key, or creator initials.
-- **Operator initials:** enter your initials (e.g. `CFB`) once on the Dashboard;
+- **Operator initials:** enter your initials (e.g. `AB`) once on the Dashboard;
   they're remembered per workstation and stamped onto every key you create.
   Key generation is refused without them.
 - **Concurrency:** short `BEGIN IMMEDIATE` transactions, `busy_timeout=30000`,
@@ -119,8 +121,9 @@ src/molkey/
   generate keys simultaneously; commits wait out active readers.
 - **Theming:** explicit dialog/messagebox/tooltip styles plus an application-wide
   fixed light palette so Windows dark mode can never produce unreadable popups.
-- **Icon:** a navy key with a turquoise DNA double helix. The editable source is
-  `assets/molkey_icon.svg`; regenerate the transparent PNG sizes and Windows
+- **Icon:** a DNA double helix flows into a key with two teeth, in ivory and
+  turquoise on a deep plum tile. The editable source is `assets/molkey_icon.svg`;
+  regenerate the transparent PNG sizes and Windows
   `molkey_icon.ico` with:
 
   ```bash
@@ -130,24 +133,18 @@ src/molkey/
 ## Development and testing
 
 ```bash
-uv run pytest -q        # unit + integration + Qt UI tests
-uv run ruff check .     # lint
-uv run mypy src         # strict type check
-uv run python scripts/qualify_smb.py   # optional: SMB concurrency qualification
+uv run python -m pytest -q       # unit + integration + Qt UI tests
+uv run python -m ruff check .    # lint
+uv run python -m mypy src        # strict type check
 ```
 
-Follows TDD (RED → GREEN → REFACTOR). CI-relevant gates: full pytest suite, Ruff,
-mypy strict, and GUI smoke via `scripts/capture_ui.py`.
-
-## eMolPat portal integration
-
-See [EMOLPAT_INTEGRATION.md](EMOLPAT_INTEGRATION.md) for the complete handoff:
-manifest entry, pinned component spec, icon assets, offline requirements, and the
-validation checklist for adding MolKey to the eMolPat portal suite.
+For a shared-drive pilot, follow the
+[SMB qualification procedure](docs/operations/smb-qualification.md) in an
+isolated test folder on the approved share. The test writes synthetic records.
 
 ## Safety and governance
 
 - Prototype status: run against test registries until governance sign-off.
 - The registry share must be access-controlled and backed up; MolKey assumes the
   hospital's standard protections for sensitive data folders.
-- Audit trail of security-relevant events lives in the registry database.
+- Each key records its creation time and the creating operator's initials.

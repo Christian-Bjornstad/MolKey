@@ -25,8 +25,8 @@ def test_excel_snapshot_contains_every_committed_mapping_and_uppercase_ids(tmp_p
     db_path = tmp_path / "registry.db"
     migrate(db_path)
     service = PatientKeyService(db_path)
-    first = service.get_or_create("26oum12345", "cfb")
-    second = service.process_batch(["26oum88888", "26OUM77777"], "anb")
+    first = service.get_or_create("26oum12345", "abc")
+    second = service.process_batch(["26oum88888", "26OUM77777"], "xyz")
 
     assert service.workbook_path.exists()
     cells = _cells(service.workbook_path)
@@ -34,7 +34,7 @@ def test_excel_snapshot_contains_every_committed_mapping_and_uppercase_ids(tmp_p
         assert record.patient_id in cells
         assert record.pseudonymous_key in cells
     assert "26oum12345" not in cells
-    assert "CFB" in cells and "ANB" in cells
+    assert "ABC" in cells and "XYZ" in cells
 
 
 def test_locked_workbook_does_not_undo_database_commit(tmp_path: Path) -> None:
@@ -42,7 +42,7 @@ def test_locked_workbook_does_not_undo_database_commit(tmp_path: Path) -> None:
     migrate(db_path)
     service = PatientKeyService(db_path)
     with patch("molkey.infrastructure.registry_workbook.os.replace", side_effect=PermissionError("open in Excel")):
-        record = service.get_or_create("26oum12345", "cfb")
+        record = service.get_or_create("26oum12345", "abc")
 
     assert service.lookup_by_patient("26OUM12345") == record
     assert service.workbook_error == "open in Excel"
@@ -56,7 +56,7 @@ def test_search_reaches_rows_outside_visible_page_and_escapes_wildcards(tmp_path
     service = PatientKeyService(db_path)
     with transaction(db_path) as conn:
         conn.executemany(
-            "INSERT INTO patient_keys (patient_id, pseudonymous_key, created_by) VALUES (?, ?, 'CFB')",
+            "INSERT INTO patient_keys (patient_id, pseudonymous_key, created_by) VALUES (?, ?, 'ABC')",
             [(f"26OUM{i:05d}", f"MK{i:016X}") for i in range(510)] + [("SPECIALABC", "MKAAAAAAAAAAAAAAAA")],
         )
 
